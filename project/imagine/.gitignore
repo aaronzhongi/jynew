@@ -1,0 +1,24 @@
+# API key / secrets
+.env
+.env.local
+
+# Generated images and cost log
+out/
+*.png
+!docs/**/*.png
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

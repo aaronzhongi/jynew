@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imagine"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = [
+    "xai-sdk",
+    "python-dotenv",
+    "click",
+    "httpx",
+    "Pillow",
+    "rembg[cpu]",
+]
+
+[project.scripts]
+imagine = "imagine.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
