@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 01e062e956954454daa1d77bc8a9f293, type: 3}
+  m_Name: Bio_HuangRong
+  m_EditorClassIdentifier:
+  AgentId: huangrong
+  RoleId: 56
+  HeadId: 56
+  BioName: "黄蓉"
+  Identity: "桃花岛黄药师之女，年方十五，灵动机敏，武学已得家传精要。容貌秀美，常以乞丐少年装扮行走江湖。心思缜密、口才锋利。对人有情亦有戒。"
+  Plans: "暂避此客栈，等追兵走远。打量在场之人，认清谁可信、谁不可信。若条件允许，再设法取回那只角落里的箱子。"
+  Relationships:
+  - TargetAgentId: ouyangke
+    Relation: 4
+  Interests:
+  - TargetAgentId: ouyangke
+    Score: 0.8
+  StartingItems:
+  - 36
+  SpawnMarkerName: NPC_Spawn_A

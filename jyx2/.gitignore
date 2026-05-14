@@ -69,6 +69,9 @@ Assets/Resources/HSFrameWork/lastbuildsysinfo.txt
 Assets/XLua/Gen/*
 Assets/StreamingAssets/*
 Assets/StreamingAssets.meta
+# Allow native-mod registry + aitavern mod descriptor to be tracked.
+# Build-time-generated AssetBundles + their hash xmls remain ignored.
+!Assets/StreamingAssets/native_mods.txt
 data/Debug/*
 data/Cache/*
 data/data/lua.bytes

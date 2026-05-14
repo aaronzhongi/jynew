@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 01e062e956954454daa1d77bc8a9f293, type: 3}
+  m_Name: Bio_OuyangKe
+  m_EditorClassIdentifier:
+  AgentId: ouyangke
+  RoleId: 61
+  HeadId: 61
+  BioName: "欧阳克"
+  Identity: "白驼山欧阳锋之侄，西毒派少主。武功不弱、心术不正。一向看上美貌女子便不放手，对黄蓉觊觎已久。举止温文，言辞含蜜，实则狠毒。"
+  Plans: "本是为躲追兵而入店歇脚，没想到撞见蓉儿妹妹。若能令她落入掌中，再不放手；若不能，至少多说几句话探她底细。"
+  Relationships:
+  - TargetAgentId: huangrong
+    Relation: 3
+  Interests:
+  - TargetAgentId: huangrong
+    Score: 0.95
+  StartingItems:
+  - 994
+  SpawnMarkerName: NPC_Spawn_B
