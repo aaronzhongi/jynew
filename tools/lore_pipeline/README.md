@@ -34,7 +34,15 @@ written, validated for shape, and committed; running it is a manual step.
 
 ## How to run
 
-From the repo root.
+**Run from the `tools/` directory** (the package is `tools/lore_pipeline`,
+so `python -m lore_pipeline.run` only resolves with `tools/` as the
+working dir):
+
+```powershell
+cd tools
+```
+
+All commands below assume you are in `tools/`.
 
 ### 1. Preview cost (no API key, no SDK needed)
 
@@ -48,7 +56,7 @@ Use this to sanity-check the prompts and the cutoff slice before paying.
 ### 2. Install the SDK + set the key
 
 ```powershell
-pip install -r tools/lore_pipeline/requirements.txt
+pip install -r lore_pipeline/requirements.txt
 $env:XAI_API_KEY = "xai-..."          # bash: export XAI_API_KEY=xai-...
 ```
 
@@ -96,11 +104,16 @@ In the Unity editor: **AI Tavern ▸ Import Lore JSON…** ▸ pick
 
 ## Cost (Plan §3.2)
 
-Rough one-time spend: **~2M input tokens** for the per-character map (回
-1–10 × roster × structured extract, with a cheap presence-gate that
-skips absent chapters), **~0.5M** for the reduce passes (world reduce +
-per-roster reduce). One-time, offline. `--dry-run` prints a conservative
-upper-bound estimate first.
+Measured by `--dry-run` for the current config (2-character roster
+huangrong + ouyangke, `CUTOFF_HUI=10`): **33 model calls, ≈373K input +
+≈63K output tokens** — one-time, offline. At grok-4-non-reasoning public
+pricing (~$2/M in, ~$10/M out — verify current rates) that is on the
+order of **$1–2 total**, NOT the "~2M tokens" Plan §3.2 hand-waved (that
+estimate assumed mapping the full notable set per-character; the
+implementation only maps the 2 roster characters that actually get a
+Bio/Dossier — the notable set is just the *targets* inside their
+dossiers). Always run `--dry-run` first to see the exact estimate for
+your config before spending.
 
 ## Why `CUTOFF_HUI = 10`
 

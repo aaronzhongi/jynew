@@ -16,6 +16,14 @@ import json
 import os
 import sys
 
+# Windows console is cp1252 by default; this prints CJK field names from the
+# contract. Force UTF-8 on the std streams (see run.py for the rationale).
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from . import config
 
 _ERRORS = []

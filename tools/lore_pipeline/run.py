@@ -20,6 +20,17 @@ import json
 import os
 import sys
 
+# The pipeline prints Chinese status text (回, 冤家聚頭, …). On Windows the
+# console defaults to the locale codepage (cp1252) which cannot encode CJK
+# and crashes with UnicodeEncodeError. Force UTF-8 on the std streams before
+# any print. Python 3.7+ (this repo uses 3.13). Best-effort: if reconfigure
+# is unavailable, fall back to replacement so a banner can't abort the run.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from . import chunker, config
 from .xai_client import XaiClient, XaiError
 from . import extract
