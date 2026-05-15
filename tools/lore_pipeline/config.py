@@ -80,6 +80,20 @@ SPOILER_EXCLUSIONS = [
     "MartialNote 只可記錄各人在回10之前 親眼所見 的招式路數"
     "（如 黃蓉 在回10比武中看出 歐陽克 借力打力、白駝山內功；"
     "歐陽克 見黃蓉 桃花島路數 + 軟蝟甲護身），不可寫武功正式名稱。",
+
+    # --- DISTINCT IDENTITIES (anti-hallucination, not a spoiler but a
+    #     fabrication fence — lore-audit found the model inventing a
+    #     歐陽克=完顏康 merge and a 黃蓉×楊康 betrothal). These are
+    #     HARD identity assertions, not "facts that haven't happened yet". ---
+    "【人物身分不可混淆】歐陽克 與 完顏康（楊康）是兩個完全不同的人物，"
+    "彼此毫無血緣、師承或化名關係。歐陽克 從未化名/假扮 完顏康，"
+    "完顏康 也從未假扮 歐陽克。嚴禁把兩人寫成同一人、互為化名、"
+    "或一人假扮另一人。在任何 relationship / sharedHistory / theyDoNotKnow "
+    "欄位都不得出現「歐陽克即完顏康」「化名」「即為同一人」之類描述。",
+    "【黃蓉對楊康一無所知】回10 黃蓉與 完顏康（楊康）僅在趙王府擦身/旁觀，"
+    "並不相識，更無任何婚約。「指腹為婚」是 楊鐵心 與 穆易 兩家兒女"
+    "（楊康/穆念慈）的舊事，與 黃蓉 完全無關。嚴禁賦予 黃蓉 與 楊康/完顏康 "
+    "任何未婚夫/婚約/舊識關係；黃蓉 對楊康的認知應為「不認識/僅遠遠見過」。",
 ]
 
 # ---------------------------------------------------------------------------
