@@ -24,6 +24,7 @@
 // only runs after that gate has fired GenerateMessage.
 
 using System;
+using System.Text;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
@@ -42,8 +43,6 @@ namespace Jyx2.AITavern
         public static async UniTask RunAsync(Agent agent, AITavernManager mgr, GenerateMessageArgs args)
         {
             if (agent == null || mgr == null || args == null) return;
-
-            Debug.Log($"[GenMsg] start agent={agent.AgentId} type={args.Type} conv={args.ConversationId}");
 
             // ---- Locate conversation ----
             Conversation conv = null;
@@ -66,18 +65,25 @@ namespace Jyx2.AITavern
             if (selfBio == null || otherBio == null || mgr.Grok == null)
             {
                 // Missing bios or no Grok client wired — Phase 1 stub line.
+                Debug.LogWarning($"[GenMsg] stub fallback agent={agent.AgentId}: selfBio={(selfBio != null ? "ok" : "null")}, otherBio={(otherBio != null ? "ok" : "null")}, grok={(mgr.Grok != null ? "ok" : "null")}");
                 text = StubLine(args.Type, selfBio);
             }
             else
             {
+                // Pull prior conversations between these two from MemoryStash
+                // so Start/Continue prompts have continuity context and the model
+                // stops looping on the same opener. Leave-type doesn't need this
+                // — the farewell only depends on the current transcript.
+                string priorMemory = BuildPriorMemoryBlock(mgr, agent.PlayerId, args.OtherPlayerId);
+
                 ConversationPrompts.Built built;
                 switch (args.Type)
                 {
                     case MessageGenerationType.Start:
-                        built = ConversationPrompts.BuildStart(selfBio, otherBio);
+                        built = ConversationPrompts.BuildStart(selfBio, otherBio, priorMemory: priorMemory);
                         break;
                     case MessageGenerationType.Continue:
-                        built = ConversationPrompts.BuildContinue(selfBio, otherBio, conv);
+                        built = ConversationPrompts.BuildContinue(selfBio, otherBio, conv, priorMemory);
                         break;
                     case MessageGenerationType.Leave:
                         built = ConversationPrompts.BuildLeave(selfBio, otherBio, conv);
@@ -131,7 +137,6 @@ namespace Jyx2.AITavern
             try
             {
                 int headId = selfBio != null ? selfBio.HeadId : 0;
-                Debug.Log($"[GenMsg] AddMessage OK; firing OnMessageGenerated(head={headId}, text='{(text.Length > 40 ? text.Substring(0, 40) + "..." : text)}')");
                 OnMessageGenerated?.Invoke(headId, text);
             }
             catch (Exception e)
@@ -148,6 +153,42 @@ namespace Jyx2.AITavern
                 try { conv.Leave(agent.PlayerId, now); }
                 catch (Exception e) { Debug.LogWarning($"[AgentGenerateMessageOp] Leave failed: {e.Message}"); }
             }
+        }
+
+        // Concatenate up to the last 2 conversation transcripts between
+        // `self` and `other` from MemoryStash. Returns null when there are
+        // none — caller drops the block from the prompt in that case.
+        // Keeping it to 2 transcripts caps prompt size so we don't blow past
+        // the 200-token reply budget once a pair has talked many times.
+        const int PRIOR_MEMORY_MAX_TRANSCRIPTS = 2;
+        static string BuildPriorMemoryBlock(AITavernManager mgr, GameId self, GameId other)
+        {
+            if (mgr == null || mgr.Memory == null) return null;
+            // Walk in insertion order; keep the most recent matches in a small
+            // ring so we don't allocate a List per call when there's nothing.
+            var ring = new string[PRIOR_MEMORY_MAX_TRANSCRIPTS];
+            int count = 0;
+            foreach (var e in mgr.Memory.ForOwner(self))
+            {
+                if (e.Type != MemoryType.Conversation) continue;
+                if (!e.Target.HasValue) continue;
+                if (!e.Target.Value.Equals(other)) continue;
+                if (string.IsNullOrWhiteSpace(e.Description)) continue;
+                ring[count % PRIOR_MEMORY_MAX_TRANSCRIPTS] = e.Description;
+                count++;
+            }
+            if (count == 0) return null;
+
+            var sb = new StringBuilder();
+            int take = count < PRIOR_MEMORY_MAX_TRANSCRIPTS ? count : PRIOR_MEMORY_MAX_TRANSCRIPTS;
+            int startIdx = count < PRIOR_MEMORY_MAX_TRANSCRIPTS ? 0 : (count % PRIOR_MEMORY_MAX_TRANSCRIPTS);
+            for (int i = 0; i < take; i++)
+            {
+                int idx = (startIdx + i) % PRIOR_MEMORY_MAX_TRANSCRIPTS;
+                sb.Append("---\n").Append(ring[idx]);
+                if (!ring[idx].EndsWith("\n")) sb.Append('\n');
+            }
+            return sb.ToString();
         }
 
         // Fallback canned lines used when bios are missing or Grok fails.

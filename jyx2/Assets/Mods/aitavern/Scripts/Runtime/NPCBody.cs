@@ -13,6 +13,12 @@ namespace Jyx2.AITavern
         // Wired by AITavernBoot on spawn (T15).
         public GameId AgentId;
 
+        // Debug flag — when true, MoveTo is a no-op so the NPC stays at its
+        // spawn marker. Useful for testing player-NPC interact without the
+        // NPC running around. Toggle in Inspector during play, or set the
+        // default in AITavernBoot.SpawnNpc.
+        public bool Frozen = true;
+
         NavMeshAgent _nav;
         bool _hasDestination;
 
@@ -44,6 +50,7 @@ namespace Jyx2.AITavern
 
         public void MoveTo(Vector3 destination)
         {
+            if (Frozen) return;
             if (_nav == null || !_nav.isOnNavMesh) return;
             _nav.SetDestination(destination);
             _hasDestination = true;

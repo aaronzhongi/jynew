@@ -136,7 +136,6 @@ namespace Jyx2.AITavern
                         var d = UnityEngine.Vector3.Distance(b1.Position, b2.Position);
                         if (d < AITavernConstants.CONVERSATION_DISTANCE_M)
                         {
-                            UnityEngine.Debug.Log($"[ConvTick] proximity reached d={d:F2}m — both → Participating ({keys[0]} + {keys[1]})");
                             b1.StopPathfinding();
                             b2.StopPathfinding();
                             m1.Status = MemberStatusKind.Participating;

@@ -208,12 +208,39 @@ namespace Jyx2.AITavern.Bridge
             _playerSpeakPanelOpen = true;
             try
             {
+                // Wait for the NPC's bubble to finish rendering before stealing
+                // the ChatUIPanel slot. Both ChatUIPanel and AITavernPlayerSpeakPanel
+                // are IsOnly=true so opening the speak panel immediately would
+                // hide the NPC's last line before the player could read it.
+                while (AITavernBubbleUI.Instance != null && AITavernBubbleUI.Instance.IsBusy)
+                {
+                    await UniTask.Yield();
+                }
+
                 string lastLine = conv.LastMessage?.Text;
                 Action<string> onSubmit = text =>
                 {
                     long nowAtSubmit = Manager.Clock?.NowMs() ?? now;
-                    try { conv.AddMessage(human.PlayerId, text, nowAtSubmit); }
-                    catch (Exception e) { Debug.LogWarning($"[AgentSimulator] Player AddMessage failed: {e.Message}"); }
+                    try
+                    {
+                        // Defensive re-acquire: the speak panel refreshes the
+                        // lock every 5s, but a frame-level hiccup could still
+                        // leave IsTyping cleared by Conversation.Tick's stale
+                        // sweep. SetIsTyping is a no-op when the player already
+                        // holds it, and only throws when another agent does —
+                        // BRANCH 22 keeps NPCs away while the player is owed
+                        // the next line, so this is safe.
+                        conv.SetIsTyping(human.PlayerId, Guid.NewGuid().ToString("N"), nowAtSubmit);
+                        conv.AddMessage(human.PlayerId, text, nowAtSubmit);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning($"[AgentSimulator] Player AddMessage failed: {e.Message}");
+                        // Allow the panel to reopen on the next frame: dedup
+                        // is keyed on LastMessage.Timestamp, so without this
+                        // reset the player loses their turn permanently.
+                        _playerSpeakSeenLastMessageTimestamp = -1;
+                    }
                     // Player-authored echo into the bubble UI. isPlayerTurn=false:
                     // the speak panel itself is the modal UI; the bubble here is
                     // just an echo so the player sees what they sent.

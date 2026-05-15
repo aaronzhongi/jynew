@@ -30,6 +30,11 @@ namespace Jyx2.AITavern
         const float WANDER_RADIUS_M = 8f;
         const float WANDER_NAVMESH_SAMPLE_RANGE_M = 4f;
         const int WANDER_RETRY_ATTEMPTS = 3;
+        // Debug flag — freeze NPCs at their spawn points so the player can
+        // test interact / chat without chasing them. Invites + conversation
+        // FSM still tick; only the wander branch is suppressed. Set false
+        // to restore autonomous wandering.
+        const bool FREEZE_WANDER = true;
 
         /// <summary>
         /// Run the op. Returns true if state-changing action taken
@@ -66,22 +71,21 @@ namespace Jyx2.AITavern
                 var invitee = PickInvitee(agent, mgr, now);
                 if (invitee != null)
                 {
-                    Debug.Log($"[DoSomething] {agent.AgentId} → INVITE {invitee.AgentId} (pathfinding={pathfinding})");
                     // Stamp LastInviteAttempt ONLY when actually attempting an
                     // invite. Stamping on every DoSomething fire (as we did
                     // before) re-armed recentlyAttemptedInvite every 500ms and
                     // permanently suppressed invites.
                     agent.LastInviteAttempt = now;
-                    var conv = Conversation.Start(mgr.Conversations, agent.PlayerId, invitee.PlayerId, now);
-                    Debug.Log($"[DoSomething] Conversation.Start → {(conv != null ? "OK id=" + conv.Id : "NULL (overlap?)")}");
+                    Conversation.Start(mgr.Conversations, agent.PlayerId, invitee.PlayerId, now);
                     return true;
                 }
-                Debug.Log($"[DoSomething] {agent.AgentId} no invitee found → wander");
             }
-            else
-            {
-                Debug.Log($"[DoSomething] {agent.AgentId} suppressed (justLeft={justLeftConversation}, recentInvite={recentlyAttemptedInvite}) → wander");
-            }
+
+            // FREEZE_WANDER: temporary debug flag — set true to keep NPCs at
+            // their spawn points so the player can test interact + chat without
+            // chasing them across the tavern. Invite + conversation FSM still
+            // run; only the random-wander branch is suppressed.
+            if (FREEZE_WANDER) return false;
 
             // INV-3.6-9: activity arm is no-op in Phase 1; we go straight to wander.
             return TryWander(agent);
@@ -98,6 +102,12 @@ namespace Jyx2.AITavern
             {
                 if (other == null) continue;
                 if (other.AgentId.Equals(self.AgentId)) continue;
+                // Disable NPC-initiated chat with the human player. The player
+                // still talks to NPCs via the interact key (AITavernBoot
+                // .OnPlayerInteractWithNpc). Removing both-sides-initiating
+                // avoids the awkward case where both parties open a turn at
+                // the same time.
+                if (other.IsHuman) continue;
 
                 // INV-3.6-4: skip anyone in an active conversation (pre-filter).
                 if (mgr.Conversations != null && mgr.Conversations.IsInActiveConversation(other.PlayerId))

@@ -48,6 +48,13 @@ namespace Jyx2.AITavern.Bridge
         readonly Queue<QueuedMessage> _queue = new Queue<QueuedMessage>();
         bool _isShowing;
 
+        // True while a bubble is on screen OR there are queued messages
+        // waiting to render. AgentSimulator gates the player speak panel on
+        // this so the NPC's reply actually finishes displaying before the
+        // panel steals the ChatUIPanel slot (Jyx2_UIManager treats both as
+        // IsOnly=true and only allows one panel up at a time).
+        public bool IsBusy => _isShowing || _queue.Count > 0;
+
         void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }

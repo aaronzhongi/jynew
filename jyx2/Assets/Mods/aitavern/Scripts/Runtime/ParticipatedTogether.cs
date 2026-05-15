@@ -14,7 +14,11 @@ namespace Jyx2.AITavern
     // Constant consolidation into AITavernConstants is deferred to T9/T10/T11.
     public class ParticipatedTogether
     {
-        private const long PLAYER_CONVERSATION_COOLDOWN_MS = 60_000L;
+        // Bumped from 60s → 180s so NPCs don't immediately re-engage the same
+        // partner after a conversation ends. Combined with prior-transcript
+        // injection in ConversationPrompts.BuildStart, this stops the "they
+        // just keep saying the same thing" loop.
+        private const long PLAYER_CONVERSATION_COOLDOWN_MS = 180_000L;
 
         private readonly Dictionary<(GameId, GameId), long> _lastEnded
             = new Dictionary<(GameId, GameId), long>();

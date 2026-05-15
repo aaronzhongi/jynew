@@ -264,9 +264,24 @@ namespace Jyx2.AITavern.Bridge
                 PlayerId = playerId,
                 IsHuman = true,
                 Body = adapter,
-                Bio = null,
+                Bio = BuildPlayerBio(),
             };
             mgr.NPCs.Register(agent);
+        }
+
+        // Runtime-only bio for the player. ConversationPrompts needs an `other`
+        // bio to render the identity block — without it AgentGenerateMessageOp
+        // falls back to canned stub lines for every NPC→player message. The
+        // persona is intentionally vague ("江湖客") so Grok can take cues from
+        // whatever the player actually says.
+        static CharacterBio BuildPlayerBio()
+        {
+            var bio = ScriptableObject.CreateInstance<CharacterBio>();
+            bio.AgentId = PLAYER_AGENT_ID;
+            bio.BioName = "江湖客";
+            bio.Identity = "一名来历不明的江湖过客，刚踏入这家客栈。身份、来路、目的皆未明。";
+            bio.HeadId = 0;
+            return bio;
         }
 
         // ---------------- Event handlers ----------------
@@ -285,19 +300,10 @@ namespace Jyx2.AITavern.Bridge
 
             var playerId = new GameId(PLAYER_AGENT_ID);
             // INV-3.9-1: refuse if the player is already in a conversation.
-            if (mgr.Conversations.IsInActiveConversation(playerId))
-            {
-                Debug.Log("[AITavernBoot] Player already in conversation; interact ignored.");
-                return;
-            }
+            if (mgr.Conversations.IsInActiveConversation(playerId)) return;
 
             var now = mgr.Clock?.NowMs() ?? 0L;
-            var conv = Conversation.Start(mgr.Conversations, playerId, npcAgentId, now);
-            if (conv == null)
-            {
-                // Other party busy, invalid id, or Start rejected via INV-3.9-1.
-                Debug.Log("[AITavernBoot] Cannot start conversation (other party busy or invalid).");
-            }
+            Conversation.Start(mgr.Conversations, playerId, npcAgentId, now);
         }
     }
 

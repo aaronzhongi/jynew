@@ -29,9 +29,10 @@ namespace Jyx2.AITavern
             public List<(string role, string content)> Messages;
         }
 
-        public static Built BuildStart(CharacterBio self, CharacterBio other, string seedHook = null)
+        public static Built BuildStart(CharacterBio self, CharacterBio other, string seedHook = null, string priorMemory = null)
         {
             var sp = BuildIdentityBlock(self, other);
+            AppendPriorMemoryBlock(sp, other, priorMemory);
             if (!string.IsNullOrEmpty(seedHook))
                 sp.Append("Possible topics: ").Append(seedHook).Append('\n');
             sp.Append("This is the beginning of your conversation. Stay in character. "
@@ -44,9 +45,10 @@ namespace Jyx2.AITavern
             };
         }
 
-        public static Built BuildContinue(CharacterBio self, CharacterBio other, Conversation conv)
+        public static Built BuildContinue(CharacterBio self, CharacterBio other, Conversation conv, string priorMemory = null)
         {
             var sp = BuildIdentityBlock(self, other);
+            AppendPriorMemoryBlock(sp, other, priorMemory);
             sp.Append("\nConversation so far:\n");
             AppendTranscript(sp, conv);
             sp.Append("\nIt is now your turn. Reply in 1-3 sentences, under 200 Chinese characters. "
@@ -70,6 +72,22 @@ namespace Jyx2.AITavern
                 SystemPrompt = sp.ToString(),
                 Messages = new List<(string, string)>(),
             };
+        }
+
+        // Append a "what you previously discussed with <other>" block so the
+        // model has continuity across conversations and stops looping on the
+        // same opener. priorMemory should already be a transcript-style blob
+        // (Author: text\n…) — AgentGenerateMessageOp builds it from MemoryStash.
+        static void AppendPriorMemoryBlock(StringBuilder sp, CharacterBio other, string priorMemory)
+        {
+            if (string.IsNullOrWhiteSpace(priorMemory)) return;
+            sp.Append("Earlier today you already had this exchange with ")
+                .Append(other.BioName).Append(":\n");
+            sp.Append(priorMemory);
+            if (!priorMemory.EndsWith("\n")) sp.Append('\n');
+            sp.Append("Do NOT repeat the same lines or rehash the same topic. "
+                + "Either bring up something genuinely new, or — if there is nothing more to say — "
+                + "wrap up with a short polite farewell instead of restarting old ground.\n");
         }
 
         // ---- Shared identity / relationship block ----

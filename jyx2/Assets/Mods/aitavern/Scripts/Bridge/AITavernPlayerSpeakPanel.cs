@@ -52,6 +52,14 @@ namespace Jyx2.AITavern.Bridge
         string _typingUuid;
         bool _lockHeld;
 
+        // Refresh the typing lock while the panel is open so
+        // Conversation.Tick's TYPING_TIMEOUT_MS (15s) doesn't clear it out
+        // from under a player who is composing a long line (Chinese IME is
+        // particularly slow). We rewrite IsTyping.Since on a cadence well
+        // under TYPING_TIMEOUT_MS so the stale-lock cleanup never trips.
+        const float TYPING_REFRESH_INTERVAL_SEC = 5f;
+        float _typingRefreshTimer;
+
         protected override void OnCreate()
         {
             base.OnCreate();
@@ -90,6 +98,7 @@ namespace Jyx2.AITavern.Bridge
                 _typingUuid = Guid.NewGuid().ToString("N");
                 _conv.SetIsTyping(_playerAgentId, _typingUuid, now);
                 _lockHeld = true;
+                _typingRefreshTimer = 0f;
             }
             catch (InvalidOperationException e)
             {
@@ -121,6 +130,30 @@ namespace Jyx2.AITavern.Bridge
             // Only react when this panel is the top visible UI, so Enter/Esc
             // don't leak through to other panels stacked on top.
             if (_conv == null) return;
+
+            // Refresh the typing lock so the stale-lock cleanup in
+            // Conversation.Tick doesn't clear it while the player is still
+            // composing. Only refresh when we still hold it — if it was
+            // stolen, OnSubmitClicked / OnCancelClicked handle the recovery.
+            if (_lockHeld)
+            {
+                _typingRefreshTimer += Time.unscaledDeltaTime;
+                if (_typingRefreshTimer >= TYPING_REFRESH_INTERVAL_SEC)
+                {
+                    _typingRefreshTimer = 0f;
+                    try
+                    {
+                        long nowMs = AITavernManager.Instance?.Clock?.NowMs() ?? 0L;
+                        _conv.SetIsTyping(_playerAgentId, _typingUuid, nowMs);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Lock was stolen by another agent. Drop our claim;
+                        // OnSubmit will re-acquire.
+                        _lockHeld = false;
+                    }
+                }
+            }
 
             // Enter to submit, Esc to cancel — works whether or not the prefab has buttons.
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))

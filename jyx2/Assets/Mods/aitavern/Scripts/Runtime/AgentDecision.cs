@@ -239,7 +239,6 @@ namespace Jyx2.AITavern
                             {
                                 // BRANCH 17 / 18: open the conversation.
                                 // INV-3.4-12 (initiator path), INV-3.4-18 (awkward break).
-                                UnityEngine.Debug.Log($"[Decision] {agent.AgentId} fires generateMessage(Start) for conv {conversation.Id} (isInitiator={isInitiator})");
                                 var uuid = System.Guid.NewGuid().ToString("N");
                                 conversation.SetIsTyping(agent.PlayerId, uuid, now);
                                 FireOp(agent, scheduler, now, OperationNames.GenerateMessage,
@@ -285,6 +284,14 @@ namespace Jyx2.AITavern
                         // agent from monopolizing the floor. (INV-3.4-14 / 22)
                         if (conversation.LastMessage.Author.Equals(agent.PlayerId))
                         {
+                            // Human partner override: never auto-continue when
+                            // the player owes the next line. The player must
+                            // reply (or close the speak panel to leave) before
+                            // this NPC speaks again. Stops "NPC keeps talking
+                            // while PC is thinking" — ai-town's awkward-deadline
+                            // mechanic assumes both sides are NPCs.
+                            if (otherAgent != null && otherAgent.IsHuman) return;
+
                             long selfAwkward = conversation.LastMessage.Timestamp + AwkwardConversationTimeoutMs;
                             if (now < selfAwkward) return;
                         }
@@ -346,7 +353,12 @@ namespace Jyx2.AITavern
         // starts after the player has had time to read the previous bubble.
         // Effective pacing: bubble shows 6s → 1s breath → next message starts.
         const long MessageCooldownMs = 7_000;
-        const long MaxConversationDurationMs = 120_000;
+        // Bumped from 120s → 600s (10 min). 2 minutes is too short when a
+        // human player is composing Chinese via IME — the chat would auto-end
+        // before they finish their second reply. MaxConversationMessages
+        // still caps NPC-NPC conversations to ~8 exchanges so the duration
+        // bump doesn't let them ramble forever.
+        const long MaxConversationDurationMs = 600_000;
         const int MaxConversationMessages = 8;
         const double InviteAcceptProbability = 0.8;
     }
