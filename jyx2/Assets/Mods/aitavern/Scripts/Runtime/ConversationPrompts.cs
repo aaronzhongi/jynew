@@ -29,7 +29,36 @@ namespace Jyx2.AITavern
             public List<(string role, string content)> Messages;
         }
 
-        public static Built BuildStart(CharacterBio self, CharacterBio other, string seedHook = null, string priorMemory = null)
+        // Phase 3A coexistence (Plan §8, CRITICAL): the ContextAssembler
+        // §1-§4 static block is PREPENDED before the existing Phase 2
+        // identity + prior-memory content. Nothing Phase 2 is removed —
+        // BuildPriorMemoryBlock, the live-transcript AppendTranscript, and
+        // the anti-repeat tail all STAY. §6.1's "delete AppendTranscript"
+        // is a 3D change, NOT 3A.
+        //
+        // The Agent/mgr/now params feed the assembler; the CharacterBio
+        // self/other params are RETAINED unchanged so the Phase 2 identity
+        // block + priorMemory path is byte-for-byte the same as before.
+        // `talker`/`talkee` may be null (tests / missing-agent paths) — the
+        // assembler returns "" in that case and only the Phase 2 block emits.
+        static void PrependAssembler(StringBuilder sp, Agent talker, Agent talkee,
+            AITavernManager mgr, long now, ContextProfile profile)
+        {
+            string staticBlock = ContextAssembler.Build(talker, talkee, mgr, now, profile);
+            if (string.IsNullOrWhiteSpace(staticBlock)) return;
+            // Splice the static block at the FRONT, followed by a separator
+            // newline, then the already-built Phase 2 content.
+            string phase2 = sp.ToString();
+            sp.Clear();
+            sp.Append(staticBlock);
+            if (!staticBlock.EndsWith("\n")) sp.Append('\n');
+            sp.Append('\n');
+            sp.Append(phase2);
+        }
+
+        public static Built BuildStart(CharacterBio self, CharacterBio other,
+            Agent talker = null, Agent talkee = null, AITavernManager mgr = null, long now = 0L,
+            string seedHook = null, string priorMemory = null)
         {
             var sp = BuildIdentityBlock(self, other);
             AppendPriorMemoryBlock(sp, other, priorMemory);
@@ -42,6 +71,8 @@ namespace Jyx2.AITavern
                 // generation instruction so it survives recency bias when the
                 // priorMemory block carries N>2 transcripts.
                 + "不要复述上面已有的对话内容；如无新话题可谈，简短礼貌告辞即可。");
+            // Phase 3A: prepend the §1-§4 static block (Full profile).
+            PrependAssembler(sp, talker, talkee, mgr, now, ContextProfile.Full);
             return new Built
             {
                 SystemPrompt = sp.ToString(),
@@ -49,11 +80,18 @@ namespace Jyx2.AITavern
             };
         }
 
-        public static Built BuildContinue(CharacterBio self, CharacterBio other, Conversation conv, string priorMemory = null)
+        public static Built BuildContinue(CharacterBio self, CharacterBio other, Conversation conv,
+            Agent talker = null, Agent talkee = null, AITavernManager mgr = null, long now = 0L,
+            string priorMemory = null)
         {
             var sp = BuildIdentityBlock(self, other);
             AppendPriorMemoryBlock(sp, other, priorMemory);
             sp.Append("\nConversation so far:\n");
+            // Phase 3A: AppendTranscript STAYS — §6.1's "the assembler is the
+            // sole transcript owner / delete AppendTranscript" is a 3D change
+            // (gated on the §5.5.3 ring existing). In 3A the live transcript
+            // is still rendered here; the assembler emits §1-§4 ONLY (no §5
+            // ring), so there is NO double-render in 3A.
             AppendTranscript(sp, conv);
             sp.Append("\nIt is now your turn. Reply in 1-3 sentences, under 200 Chinese characters. "
                 + "DO NOT greet again. DO NOT repeat what you just said. Stay in character.\n"
@@ -61,6 +99,8 @@ namespace Jyx2.AITavern
                 // content (the existing English line above only covers the
                 // immediately-preceding message, not the broader transcript).
                 + "不要复述上面已有的对话内容；如无新话题可谈，简短礼貌告辞即可。");
+            // Phase 3A: prepend the §1-§4 static block (Full profile).
+            PrependAssembler(sp, talker, talkee, mgr, now, ContextProfile.Full);
             return new Built
             {
                 SystemPrompt = sp.ToString(),
@@ -68,13 +108,21 @@ namespace Jyx2.AITavern
             };
         }
 
-        public static Built BuildLeave(CharacterBio self, CharacterBio other, Conversation conv)
+        public static Built BuildLeave(CharacterBio self, CharacterBio other, Conversation conv,
+            Agent talker = null, Agent talkee = null, AITavernManager mgr = null, long now = 0L)
         {
             var sp = BuildIdentityBlock(self, other);
             sp.Append("\nConversation so far:\n");
+            // Phase 3A: AppendTranscript STAYS (same as BuildContinue — 3D
+            // change, not 3A). The Leave assembler profile emits §2 ONLY in
+            // 3A (no §5.4/§5.5.3 yet), so no double-render.
             AppendTranscript(sp, conv);
             sp.Append("\nThis conversation has run long. "
                 + "Give a short, in-character farewell (1 sentence, under 50 characters), then stop.");
+            // Phase 3A: prepend the lean Leave static block (Plan §6.1) —
+            // §2 only in 3A (§1/§3/§4 explicitly excluded; §5.4/§5.5.3 are
+            // 3B-3D). Keeps a <50-char goodbye from routing ~15k chars.
+            PrependAssembler(sp, talker, talkee, mgr, now, ContextProfile.Leave);
             return new Built
             {
                 SystemPrompt = sp.ToString(),

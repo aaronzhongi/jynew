@@ -94,6 +94,15 @@ namespace Jyx2.AITavern.Bridge
                 return;
             }
 
+            // Phase 3A (Plan §6 / §8): load the static layered-memory assets.
+            // Both are OPTIONAL — graceful degradation. If the offline lore
+            // pipeline (T3A.6) hasn't run yet, Resources returns null/empty;
+            // the ContextAssembler simply omits §1/§4 and conversations still
+            // run on the retained Phase 2 memory path (the 3A coexistence
+            // rule). 3A must ship and run with NPCs talking even before the
+            // assets exist.
+            LoadWorldAndDossiers(mgr);
+
             // Populate RelationshipGraph from each bio (§11.2 / §11.5).
             foreach (var bio in bios)
             {
@@ -180,6 +189,63 @@ namespace Jyx2.AITavern.Bridge
 #else
             return new List<CharacterBio>();
 #endif
+        }
+
+        // Phase 3A: mirror LoadBios for the static layered-memory assets.
+        //   - WorldCodex: one global asset at Resources/AITavern/WorldCodex.
+        //   - Dossiers:   Resources/AITavern/Dossiers/*.asset, keyed by AgentId.
+        // Both OPTIONAL: if the lore pipeline hasn't run yet, log an INFO
+        // note and continue (graceful degradation — §1/§4 just omitted).
+        // AssetDatabase editor fallback mirrors LoadBios so dev iteration
+        // works before assets are moved under a Resources folder.
+        void LoadWorldAndDossiers(AITavernManager mgr)
+        {
+            // ---- WorldCodex (one global asset) ----
+            var world = Resources.Load<WorldCodex>("AITavern/WorldCodex");
+#if UNITY_EDITOR
+            if (world == null)
+            {
+                var wguids = UnityEditor.AssetDatabase.FindAssets("t:WorldCodex", new[] { "Assets/Mods/aitavern" });
+                if (wguids != null && wguids.Length > 0)
+                {
+                    var wpath = UnityEditor.AssetDatabase.GUIDToAssetPath(wguids[0]);
+                    world = UnityEditor.AssetDatabase.LoadAssetAtPath<WorldCodex>(wpath);
+                }
+            }
+#endif
+            mgr.World = world; // may stay null — §1 omitted, not an error
+
+            // ---- Dossiers (per roster character) ----
+            var dossiers = Resources.LoadAll<CharacterDossier>("AITavern/Dossiers");
+            List<CharacterDossier> dossierList = (dossiers != null && dossiers.Length > 0)
+                ? dossiers.ToList()
+                : new List<CharacterDossier>();
+#if UNITY_EDITOR
+            if (dossierList.Count == 0)
+            {
+                var dguids = UnityEditor.AssetDatabase.FindAssets("t:CharacterDossier", new[] { "Assets/Mods/aitavern" });
+                foreach (var g in dguids)
+                {
+                    var path = UnityEditor.AssetDatabase.GUIDToAssetPath(g);
+                    var dos = UnityEditor.AssetDatabase.LoadAssetAtPath<CharacterDossier>(path);
+                    if (dos != null) dossierList.Add(dos);
+                }
+            }
+#endif
+            if (mgr.Dossiers == null) mgr.Dossiers = new Dictionary<string, CharacterDossier>();
+            foreach (var dos in dossierList)
+            {
+                if (dos == null || string.IsNullOrEmpty(dos.AgentId)) continue;
+                mgr.Dossiers[dos.AgentId] = dos;
+            }
+
+            if (mgr.World == null || mgr.Dossiers.Count == 0)
+            {
+                // INFO-level (Log, not Warning/Error): this is the expected
+                // pre-pipeline state, not a failure. 3A ships and runs here.
+                Debug.Log("[AITavern] no WorldCodex/Dossiers yet — §1/§4 will be omitted until lore pipeline runs"
+                    + $" (World={(mgr.World != null ? "ok" : "null")}, Dossiers={mgr.Dossiers.Count}).");
+            }
         }
 
         void SpawnNpc(CharacterBio bio, Transform npcRoot, AITavernManager mgr)

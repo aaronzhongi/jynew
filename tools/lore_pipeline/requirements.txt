@@ -1,0 +1,12 @@
+# AI Tavern lore pipeline (T3A.6) — dependencies.
+#
+# The ONLY dependency: the official xAI SDK. Per the user's standing rule,
+# xAI work in Python uses xai-sdk — NOT the openai package, NOT raw
+# requests/HTTP. Everything else (chunking, JSON I/O, validation) is
+# Python stdlib only.
+#
+#   pip install -r tools/lore_pipeline/requirements.txt
+#
+# --dry-run does NOT need this installed (no network, no key).
+
+xai-sdk>=0.1

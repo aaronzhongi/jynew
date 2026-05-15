@@ -3,6 +3,11 @@ using UnityEngine;
 
 namespace Jyx2.AITavern
 {
+    // Phase 3 (§2.2) demographic sex. Top-level (NOT nested in CharacterBio) so a future
+    // importer and CharacterBio.Sex can both reference it. Distinct from jynew's
+    // Character.Sexual int (different assembly — no collision).
+    public enum Sex { Male, Female, Other }
+
     [System.Serializable]
     public class InterestEntry
     {
@@ -43,6 +48,16 @@ namespace Jyx2.AITavern
 
         [Header("World Placement")]
         public string SpawnMarkerName;   // GameObject name under Level/NPC/
+
+        // --- Phase 3 (§2.2): demographic / first-impression / trait split ---
+        // Additive only — appended after existing fields so Phase 1/2 Bio_*.asset files
+        // still deserialize (Unity default-inits new serialized fields).
+        [Header("Phase 3 — Demographics & Surface")]
+        public Sex Sex;                          // seed from jynew Character.Sexual (0=Male,1=Female,2=Other) at pipeline time
+        public string AgeText;                   // "约十五" — prose, wuxia rarely gives exact ages
+        [TextArea] public string Personality;    // §2 性情 talker self trait — distinct from Identity
+        [TextArea] public string Appearance;     // §3 外貌 — what a STRANGER sees first
+        [TextArea] public string SurfaceManner;  // §3 气度 — first-impression demeanor only
 
         // Helpers -----------------------------------------------------------------------
 

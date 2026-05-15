@@ -76,17 +76,28 @@ namespace Jyx2.AITavern
                 // — the farewell only depends on the current transcript.
                 string priorMemory = BuildPriorMemoryBlock(mgr, agent.PlayerId, args.OtherPlayerId);
 
+                // Phase 3A: thread the agents/mgr/clock through so
+                // ConversationPrompts can PREPEND the ContextAssembler
+                // §1-§4 static block ahead of the retained Phase 2
+                // identity+priorMemory content (Plan §8 coexistence).
+                long promptNow = mgr.Clock != null ? mgr.Clock.NowMs() : 0L;
+
                 ConversationPrompts.Built built;
                 switch (args.Type)
                 {
                     case MessageGenerationType.Start:
-                        built = ConversationPrompts.BuildStart(selfBio, otherBio, priorMemory: priorMemory);
+                        built = ConversationPrompts.BuildStart(selfBio, otherBio,
+                            talker: agent, talkee: otherAgent, mgr: mgr, now: promptNow,
+                            priorMemory: priorMemory);
                         break;
                     case MessageGenerationType.Continue:
-                        built = ConversationPrompts.BuildContinue(selfBio, otherBio, conv, priorMemory);
+                        built = ConversationPrompts.BuildContinue(selfBio, otherBio, conv,
+                            talker: agent, talkee: otherAgent, mgr: mgr, now: promptNow,
+                            priorMemory: priorMemory);
                         break;
                     case MessageGenerationType.Leave:
-                        built = ConversationPrompts.BuildLeave(selfBio, otherBio, conv);
+                        built = ConversationPrompts.BuildLeave(selfBio, otherBio, conv,
+                            talker: agent, talkee: otherAgent, mgr: mgr, now: promptNow);
                         break;
                     default:
                         text = StubLine(args.Type, selfBio);

@@ -27,6 +27,16 @@ namespace Jyx2.AITavern
         public MemoryStash Memory;
         public RelationshipGraph Relations;
 
+        // Phase 3A (Plan §6 / §8) — static layered-memory assets, loaded by
+        // AITavernBoot from Resources/AITavern/ (graceful degradation: both
+        // OPTIONAL — null/empty until the offline lore pipeline T3A.6 runs).
+        //   World    : §1 World Codex (one global asset; null → §1 omitted).
+        //   Dossiers : §4 per-talker long-term knowledge, keyed by AgentId
+        //              (absent key → §4 omitted for that talker).
+        // Mirrors the Memory/NPCs in-process-state pattern; never serialized.
+        public WorldCodex World;
+        public Dictionary<string, CharacterDossier> Dossiers = new Dictionary<string, CharacterDossier>();
+
         // Injectable interfaces — production uses SystemClock + GrokClient;
         // tests inject FakeClock + MockGrokClient.
         public IClock Clock;
@@ -87,6 +97,11 @@ namespace Jyx2.AITavern
             if (PairCooldowns == null) PairCooldowns = new ParticipatedTogether();
             if (Memory == null) Memory = new MemoryStash();
             if (Relations == null) Relations = new RelationshipGraph();
+            // Phase 3A: dict must exist so ContextAssembler's §4 lookup
+            // (mgr.Dossiers.TryGetValue) doesn't NRE in edit-mode tests
+            // before the lore pipeline has produced assets. `World` stays
+            // null until AITavernBoot loads it (null → §1 simply omitted).
+            if (Dossiers == null) Dossiers = new Dictionary<string, CharacterDossier>();
             if (Clock == null) Clock = new SystemClock();
             // Grok left null intentionally — production must explicitly inject GrokClient
             // OR the missing-key path engages the stub-line fallback (Phase 1 §4.4).

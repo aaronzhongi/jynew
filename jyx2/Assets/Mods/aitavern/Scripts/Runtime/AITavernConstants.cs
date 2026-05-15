@@ -56,5 +56,14 @@ namespace Jyx2.AITavern
         public const int MEMORY_SUMMARY_MAX_CHARS = 400;
         public const int MEMORY_SUMMARY_MAX_TOKENS = 500;
         public const float MEMORY_SUMMARY_TEMPERATURE = 0.3f;  // factual compression, not creative
+
+        // Phase 3A — ContextAssembler §1-§4 static-section char budgets
+        // (Plan §7). Each layered section is independently truncated so one
+        // verbose dossier can't crowd out the rest of the prompt. The §5
+        // short-term + decay/reflect constants land in 3B-3D, not here.
+        public const int SECT_WORLD_BUDGET    = 1500;  // §1 World Codex
+        public const int SECT_SELFBIO_BUDGET  = 600;   // §2 talker bio
+        public const int SECT_TALKEE_BUDGET   = 400;   // §3 talkee first-impression surface
+        public const int SECT_LONGTERM_BUDGET = 3000;  // §4 long-term knowledge (polity/faction/person)
     }
 }
