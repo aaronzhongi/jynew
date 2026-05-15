@@ -1,0 +1,223 @@
+{
+  "dossiers": [
+    {
+      "agentId": "huangrong",
+      "polityKnowledge": [],
+      "factionKnowledge": [],
+      "people": [
+        {
+          "target": "黄药师",
+          "relationship": "传主认为自己是其独生爱女，据传主所见父亲曾因自己同情被关之人并陪其说话而责骂自己",
+          "impression": "传主认为父亲武功极高，据传主所见其曾关住一人",
+          "martialNote": "桃花岛路数",
+          "sharedHistory": "据传主所见自己因被父亲责骂，夜里偷偷逃出离家出走",
+          "theyDoNotKnow": "对方表示不知传主目前已离家出走并与郭靖结识同行"
+        },
+        {
+          "target": "欧阳锋",
+          "relationship": "据传主所见尚未直接相识",
+          "impression": "",
+          "martialNote": "",
+          "sharedHistory": "",
+          "theyDoNotKnow": "对方表示不知传主目前行踪及所作所为"
+        },
+        {
+          "target": "郭靖",
+          "relationship": "传主认为自己与郭靖已互诉心意，结为知交好友",
+          "impression": "传主认为郭靖慷慨重义、真心待己极好",
+          "martialNote": "",
+          "sharedHistory": "据传主所见曾在张家口饭店结识共餐长谈，接受其赠貂裘黄金及汗血宝马，后于湖心泛舟互诉心意，一同潜入赵王府取药并共同对抗追兵",
+          "theyDoNotKnow": "对方表示不知传主真实身份为黄药师之女及身怀桃花岛武功"
+        },
+        {
+          "target": "周伯通",
+          "relationship": "据传主所见尚未相识",
+          "impression": "",
+          "martialNote": "",
+          "sharedHistory": "",
+          "theyDoNotKnow": "对方表示不知传主目前行踪及所作所为"
+        },
+        {
+          "target": "梅超风",
+          "relationship": "据传主所见以桃花岛师妹身份呼其本名‘梅若华’",
+          "impression": "传主认为其为黑风双煞之一，对其表现出强烈厌恶与鄙视",
+          "martialNote": "",
+          "sharedHistory": "据传主所见在玫瑰花丛中现身，以桃花岛身份和父亲将至吓退对方，并命其立功对抗追兵",
+          "theyDoNotKnow": "对方表示不知传主目前真实下落及正与郭靖共同行动"
+        },
+        {
+          "target": "完颜洪烈",
+          "relationship": "据传主所见仅在赵王府旁观其与他人对话",
+          "impression": "传主认为其为金国赵王",
+          "martialNote": "",
+          "sharedHistory": "据传主所见在比武招亲现场目睹其子与郭靖争斗，后在赵王府香雪厅外偷听其讲述岳飞兵书之事",
+          "theyDoNotKnow": "对方表示不知传主真实身份及正潜入其府中行动"
+        },
+        {
+          "target": "完颜康（杨康）",
+          "relationship": "据传主所见仅在赵王府中远观其与他人冲突，并不相识",
+          "impression": "传主认为其为赵王之子",
+          "martialNote": "",
+          "sharedHistory": "据传主所见在比武招亲人群中旁观其与穆念慈比武及后续冲突，后在铁牢外旁观其与穆易父女对话并跟踪至王妃居所窥视",
+          "theyDoNotKnow": "对方表示不知传主真实身份及正潜入其府中行动"
+        },
+        {
+          "target": "穆念慈",
+          "relationship": "据传主所见仅在赵王府中远观其与完颜康比武，并不相识",
+          "impression": "",
+          "martialNote": "",
+          "sharedHistory": "据传主所见在比武招亲人群中旁观其与完颜康比武，后随郭靖潜入铁牢查看其与穆易被关情形",
+          "theyDoNotKnow": "对方表示不知传主真实身份及正潜入赵王府查看自己"
+        },
+        {
+          "target": "丘处机",
+          "relationship": "据传主所见仅旁观其与他人相关议论",
+          "impression": "",
+          "martialNote": "",
+          "sharedHistory": "据传主所见在醉仙楼参与江南七怪与丘处机的比酒及比武，后在比武招亲现场旁观中听闻完颜康师承全真教相关议论",
+          "theyDoNotKnow": "对方表示不知传主真实身份及目前行踪"
+        },
+        {
+          "target": "王处一",
+          "relationship": "据传主所见仅在比武招亲现场目睹其出手救郭靖",
+          "impression": "",
+          "martialNote": "",
+          "sharedHistory": "据传主所见知其受伤需药，曾与郭靖共商往赵王府取药之策",
+          "theyDoNotKnow": "对方表示不知传主真实身份及正协助取药"
+        },
+        {
+          "target": "沙通天",
+          "relationship": "据传主所见曾戏弄其师弟侯通海",
+          "impression": "",
+          "martialNote": "移形换位",
+          "sharedHistory": "据传主所见在比武招亲现场旁观其师弟侯通海及黄河四鬼追逐自己，后在赵王府以轻功和计谋与其周旋，被其以移形换位拦住去路",
+          "theyDoNotKnow": "对方表示不知传主真实身份为黄药师之女"
+        },
+        {
+          "target": "彭连虎",
+          "relationship": "据传主所见在赵王府厅中与其比试武功",
+          "impression": "",
+          "martialNote": "",
+          "sharedHistory": "据传主所见在比武招亲现场旁观其与梁子翁、灵智上人等议论，后在赵王府以兰花拂穴手与其拆招，被其以钱镖逼回厅内并质问门派，以言语驳斥并获胜离开",
+          "theyDoNotKnow": "对方表示不知传主真实身份为黄药师之女"
+        },
+        {
+          "target": "梁子翁",
+          "relationship": "据传主所见在赵王府以柔声诉苦骗其折梅花",
+          "impression": "",
+          "martialNote": "",
+          "sharedHistory": "据传主所见在比武招亲现场旁观其与彭连虎、灵智上人等议论，后在赵王府被其因蛇血被吸而追查，并在追赶中被梅超风以其为目标攻击",
+          "theyDoNotKnow": "对方表示不知传主真实身份及目前行踪"
+        },
+        {
+          "target": "灵智上人",
+          "relationship": "据传主所见在赵王府被其以铜钹和大手印攻击",
+          "impression": "",
+          "martialNote": "大手印",
+          "sharedHistory": "据传主所见在比武招亲现场旁观其与彭连虎、梁子翁等议论，后在赵王府厅中被其攻击，借力逃脱并令其掌心被软猬甲刺伤",
+          "theyDoNotKnow": "对方表示不知传主真实身份为黄药师之女"
+        },
+        {
+          "target": "欧阳克",
+          "relationship": "据传主所见其称赞自己美貌并欲收为弟子",
+          "impression": "传主认为其为白驼山一脉少主",
+          "martialNote": "借力打力、白驼山内功",
+          "sharedHistory": "据传主所见在饭店曾见其八名白衣女子欲夺郭靖宝马献给他，后曾戏弄其师弟侯通海，在赵王府厅中对话并比试，以诡计胜出后被其追赶",
+          "theyDoNotKnow": "对方表示不知传主真实身份为黄药师之女及身怀桃花岛武功"
+        }
+      ]
+    },
+    {
+      "agentId": "ouyangke",
+      "polityKnowledge": [],
+      "factionKnowledge": [
+        {
+          "subject": "白驼山",
+          "text": "据传主所见，白驼山为西域门派，其叔父为该派之主，他本人为少主"
+        }
+      ],
+      "people": [
+        {
+          "target": "欧阳锋",
+          "relationship": "据传主所见，对方是其叔父，他自称已得对方武功真传",
+          "impression": "传主认为对方是西域高手，仗着对方撑腰可在西域横行",
+          "martialNote": "",
+          "sharedHistory": "据传主所见，对方派他前来燕京赴完颜洪烈之聘，他曾率手下商议献汗血宝马给对方以求在京中聚会时露脸",
+          "theyDoNotKnow": "对方表示不知传主在赵王府香雪厅比武时被黄蓉以言语僵住而未追出圈子之事"
+        },
+        {
+          "target": "郭靖",
+          "relationship": "据传主所见，对方是他在赵王府遇到的蒙古少年",
+          "impression": "传主认为对方武功底子寻常，曾被他以借力打力摔倒",
+          "martialNote": "传主亲眼见对方使用分筋错骨手拿人",
+          "sharedHistory": "据传主所见，他在赵王府花厅见到对方被众人针对时出言评理，后在夜间与对方比武",
+          "theyDoNotKnow": "对方表示不知传主曾率白衣女子男装打扮在张家口饭店商议夺取其汗血宝马"
+        },
+        {
+          "target": "完颜洪烈",
+          "relationship": "据传主所见，对方是聘请他前来燕京的赵王",
+          "impression": "传主认为对方是金国权贵，他受对方邀请赴宴",
+          "martialNote": "",
+          "sharedHistory": "据传主所见，对方在香雪厅设宴，他参与其中并听对方训诫",
+          "theyDoNotKnow": "对方表示不知传主在香雪厅比武后率众姬追寻黄蓉下落"
+        },
+        {
+          "target": "完颜康",
+          "relationship": "据传主所见，对方是赵王世子，曾邀请他至赵王府赴宴",
+          "impression": "传主认为对方是金国年轻王孙，举止得体",
+          "martialNote": "",
+          "sharedHistory": "据传主所见，对方在花厅中向众人介绍他的白驼山少主身份并安排席位，两人同席",
+          "theyDoNotKnow": "对方表示不知传主在张家口饭店时其手下曾商议献宝马给他以求露脸"
+        },
+        {
+          "target": "黄蓉",
+          "relationship": "据传主所见，对方是他在赵王府遇到的少女",
+          "impression": "传主认为对方容貌极美远胜己之姬妾，武功路数奇特",
+          "martialNote": "传主亲眼见对方使用桃花岛路数及软猬甲护身",
+          "sharedHistory": "据传主所见，他在香雪厅初见对方即称赞其美貌，提出拜师永随条件，与对方比武画圈，后见灵智上人攻击对方时大叫手下留情，并率众姬追寻其下落；此前其手下曾在饭店议论对方",
+          "theyDoNotKnow": "对方表示不知传主真实身份为白驼山少主欧阳克，仅知其在厅中自称要收其为徒"
+        },
+        {
+          "target": "彭连虎",
+          "relationship": "据传主所见，对方是赵王府宴席同席之人",
+          "impression": "传主认为对方是江湖豪客，曾要求他展示功夫",
+          "martialNote": "",
+          "sharedHistory": "据传主所见，两人同在赵王府花厅及香雪厅，其手下曾在张家口饭店议论对方手下也欲去京中聚会",
+          "theyDoNotKnow": "对方表示不知传主在香雪厅比武时以腰带缚双手退入圈中"
+        },
+        {
+          "target": "梁子翁",
+          "relationship": "据传主所见，对方是赵王府宴席同席之人",
+          "impression": "传主认为对方是江湖人物，曾在其展示功夫后于筷子上施展拳法",
+          "martialNote": "",
+          "sharedHistory": "据传主所见，两人同在赵王府花厅及香雪厅，他曾差人向对方取药",
+          "theyDoNotKnow": "对方表示不知传主曾以兔子折腿骗其母亲医治"
+        },
+        {
+          "target": "灵智上人",
+          "relationship": "据传主所见，对方是赵王府宴席同席之人",
+          "impression": "传主认为对方是西域僧人，曾出手攻击黄蓉",
+          "martialNote": "",
+          "sharedHistory": "据传主所见，两人同在赵王府花厅及香雪厅，他在厅中见对方以铜钹及大手印攻击黄蓉时大叫手下留情；其手下曾在饭店议论对方",
+          "theyDoNotKnow": "对方表示不知传主在香雪厅比武后跃出门外率众姬追寻黄蓉"
+        },
+        {
+          "target": "沙通天",
+          "relationship": "据传主所见，对方是赵王府宴席同席之人",
+          "impression": "传主认为对方是江湖豪客，曾与其化解争端",
+          "martialNote": "",
+          "sharedHistory": "据传主所见，两人在赵王府花厅及香雪厅同席，他曾出手化解对方与王处一对掌",
+          "theyDoNotKnow": "对方表示不知传主在香雪厅以足尖画圈比武"
+        },
+        {
+          "target": "王处一",
+          "relationship": "据传主所见，对方是赵王府宴席同席之人",
+          "impression": "传主认为对方是全真教道士",
+          "martialNote": "",
+          "sharedHistory": "据传主所见，两人在赵王府花厅同席，他曾出手化解对方与沙通天对掌",
+          "theyDoNotKnow": "对方表示不知传主真实身份为白驼山少主"
+        }
+      ]
+    }
+  ]
+}
