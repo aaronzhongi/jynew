@@ -37,7 +37,11 @@ namespace Jyx2.AITavern
                 sp.Append("Possible topics: ").Append(seedHook).Append('\n');
             sp.Append("This is the beginning of your conversation. Stay in character. "
                 + "Reply in 1-3 sentences, under 200 Chinese characters. "
-                + "Do not narrate actions — only speak.");
+                + "Do not narrate actions — only speak.\n"
+                // Phase 2 (Plan §4.1): anti-repeat guard sits adjacent to the
+                // generation instruction so it survives recency bias when the
+                // priorMemory block carries N>2 transcripts.
+                + "不要复述上面已有的对话内容；如无新话题可谈，简短礼貌告辞即可。");
             return new Built
             {
                 SystemPrompt = sp.ToString(),
@@ -52,7 +56,11 @@ namespace Jyx2.AITavern
             sp.Append("\nConversation so far:\n");
             AppendTranscript(sp, conv);
             sp.Append("\nIt is now your turn. Reply in 1-3 sentences, under 200 Chinese characters. "
-                + "DO NOT greet again. DO NOT repeat what you just said. Stay in character.");
+                + "DO NOT greet again. DO NOT repeat what you just said. Stay in character.\n"
+                // Phase 2 (Plan §4.1): anti-repeat guard for prior-history
+                // content (the existing English line above only covers the
+                // immediately-preceding message, not the broader transcript).
+                + "不要复述上面已有的对话内容；如无新话题可谈，简短礼貌告辞即可。");
             return new Built
             {
                 SystemPrompt = sp.ToString(),
@@ -74,20 +82,19 @@ namespace Jyx2.AITavern
             };
         }
 
-        // Append a "what you previously discussed with <other>" block so the
-        // model has continuity across conversations and stops looping on the
-        // same opener. priorMemory should already be a transcript-style blob
-        // (Author: text\n…) — AgentGenerateMessageOp builds it from MemoryStash.
+        // Phase 2 (Plan §4): pass-through stitcher. The block is now fully
+        // pre-rendered by AgentGenerateMessageOp.BuildPriorMemoryBlock with
+        // its own Chinese "你与 <other> 的过往：" framing, summary section,
+        // and [刚刚结束的对话] marker. The per-type anti-repeat / wrap-up
+        // tail is appended elsewhere (T7 attaches it to BuildStart /
+        // BuildContinue). All this helper does now is splice in the
+        // already-rendered text and ensure it ends with a newline so the
+        // following prompt section starts on a fresh line.
         static void AppendPriorMemoryBlock(StringBuilder sp, CharacterBio other, string priorMemory)
         {
             if (string.IsNullOrWhiteSpace(priorMemory)) return;
-            sp.Append("Earlier today you already had this exchange with ")
-                .Append(other.BioName).Append(":\n");
             sp.Append(priorMemory);
             if (!priorMemory.EndsWith("\n")) sp.Append('\n');
-            sp.Append("Do NOT repeat the same lines or rehash the same topic. "
-                + "Either bring up something genuinely new, or — if there is nothing more to say — "
-                + "wrap up with a short polite farewell instead of restarting old ground.\n");
         }
 
         // ---- Shared identity / relationship block ----

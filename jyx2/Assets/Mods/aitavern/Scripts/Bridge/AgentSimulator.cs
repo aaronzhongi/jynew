@@ -103,7 +103,7 @@ namespace Jyx2.AITavern.Bridge
                             Debug.LogWarning($"[AgentSimulator] GenerateMessage missing args (got {args}).");
                         break;
                     case OperationNames.RememberConversation:
-                        AgentRememberConversationStub.Run(agent, Manager, now);
+                        await AgentRememberConversationOp.RunAsync(agent, Manager, now);
                         break;
                     default:
                         Debug.LogWarning($"[AgentSimulator] Unknown op '{opName}'");

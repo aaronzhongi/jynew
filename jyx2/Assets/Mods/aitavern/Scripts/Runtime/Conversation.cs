@@ -175,7 +175,7 @@ namespace Jyx2.AITavern
         // Order of operations:
         //   1. Snapshot participant ids (we mutate state below).
         //   2. For each non-human participant: stamp Agent.LastConversation = now
-        //      and Agent.ToRemember = this.Id so AgentRememberConversationStub
+        //      and Agent.ToRemember = this.Id so AgentRememberConversationOp
         //      will fire on its next tick.
         //   3. Record canonical pair cooldown (ParticipatedTogether is bidirectional;
         //      we record the single canonical (p1, p2) ordering it internalizes).
@@ -198,6 +198,12 @@ namespace Jyx2.AITavern
                     if (agent == null || agent.IsHuman) continue;
                     agent.LastConversation = now;
                     agent.ToRemember = Id;
+                    // Stamp the partner so AgentRememberConversationOp can find it
+                    // without a MemoryStash scan + magic time window (Phase 2 §6.1).
+                    GameId partnerId = default;
+                    foreach (var otherPid in participantIds)
+                        if (!otherPid.Equals(pid)) { partnerId = otherPid; break; }
+                    agent.ToRememberPartner = partnerId;
                 }
             }
 

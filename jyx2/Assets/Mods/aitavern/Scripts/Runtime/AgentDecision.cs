@@ -110,7 +110,7 @@ namespace Jyx2.AITavern
 
             // ---------------- BRANCH 8: agentRememberConversation ----------------
             // INV-3.4-6: pending memory write — fire and walk away. The
-            // remembrance runner (AgentRememberConversationStub in Phase 1)
+            // remembrance runner (AgentRememberConversationOp)
             // is the one that clears ToRemember.
             if (agent.ToRemember.HasValue)
             {

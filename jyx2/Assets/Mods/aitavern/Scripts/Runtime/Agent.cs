@@ -14,6 +14,10 @@ namespace Jyx2.AITavern
         // AgentDecision.Tick schedules agentRememberConversation and clears.
         public System.Nullable<System.Guid> ToRemember;
 
+        // Partner agent id paired with ToRemember; set by Conversation.StopWithManager
+        // so AgentRememberConversationOp can find them without scanning MemoryStash.
+        public GameId? ToRememberPartner;
+
         // ms epoch; written by Conversation.Stop / Conversation.Leave.
         // Drives `justLeftConversation` per INV-3.6-1.
         public long? LastConversation;

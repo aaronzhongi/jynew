@@ -155,39 +155,108 @@ namespace Jyx2.AITavern
             }
         }
 
-        // Concatenate up to the last 2 conversation transcripts between
-        // `self` and `other` from MemoryStash. Returns null when there are
-        // none — caller drops the block from the prompt in that case.
-        // Keeping it to 2 transcripts caps prompt size so we don't blow past
-        // the 200-token reply budget once a pair has talked many times.
-        const int PRIOR_MEMORY_MAX_TRANSCRIPTS = 2;
-        static string BuildPriorMemoryBlock(AITavernManager mgr, GameId self, GameId other)
+        // Phase 2 (Plan §4): Build the prior-memory block injected into Start /
+        // Continue system prompts. Pulls the per-pair CompactedSummary plus all
+        // un-folded Conversation MemoryEntries for (self, other), sorted by
+        // EndedAt ascending. The most recent transcript is tagged
+        // [刚刚结束的对话] so the model can distinguish "just happened" from
+        // older history. If the rendered block exceeds the configured budget
+        // (chars × MEMORY_CONTEXT_HARD_OVERFLOW_FACTOR), the oldest un-folded
+        // transcripts are dropped one at a time as a deterministic read-side
+        // soft-truncate fallback. The summary and the most recent transcript
+        // are always retained.
+        internal static string BuildPriorMemoryBlock(AITavernManager mgr, GameId self, GameId other)
         {
             if (mgr == null || mgr.Memory == null) return null;
-            // Walk in insertion order; keep the most recent matches in a small
-            // ring so we don't allocate a List per call when there's nothing.
-            var ring = new string[PRIOR_MEMORY_MAX_TRANSCRIPTS];
-            int count = 0;
+
+            // 1) Per-pair compacted summary (may be null).
+            var summary = mgr.Memory.GetSummary(self, other);
+
+            // 2) All un-folded Conversation entries for this pair.
+            var transcripts = new System.Collections.Generic.List<MemoryEntry>();
             foreach (var e in mgr.Memory.ForOwner(self))
             {
-                if (e.Type != MemoryType.Conversation) continue;
+                if (e.Type != MemoryType.Conversation) continue;       // Relationship / Reflection never belong here.
                 if (!e.Target.HasValue) continue;
                 if (!e.Target.Value.Equals(other)) continue;
+                if (e.IsFolded) continue;                              // Folded content is represented by `summary`.
                 if (string.IsNullOrWhiteSpace(e.Description)) continue;
-                ring[count % PRIOR_MEMORY_MAX_TRANSCRIPTS] = e.Description;
-                count++;
+                transcripts.Add(e);
             }
-            if (count == 0) return null;
+            transcripts.Sort((a, b) => a.EndedAt.CompareTo(b.EndedAt));
 
-            var sb = new StringBuilder();
-            int take = count < PRIOR_MEMORY_MAX_TRANSCRIPTS ? count : PRIOR_MEMORY_MAX_TRANSCRIPTS;
-            int startIdx = count < PRIOR_MEMORY_MAX_TRANSCRIPTS ? 0 : (count % PRIOR_MEMORY_MAX_TRANSCRIPTS);
-            for (int i = 0; i < take; i++)
+            // 3) Nothing to inject — caller drops the block from the prompt.
+            if (summary == null && transcripts.Count == 0) return null;
+
+            // 4) Resolve the other agent's display name for the header.
+            string otherName = other.Value;
+            var otherAgent = mgr.NPCs != null ? mgr.NPCs.Get(other) : null;
+            if (otherAgent != null && otherAgent.Bio != null && !string.IsNullOrEmpty(otherAgent.Bio.BioName))
+                otherName = otherAgent.Bio.BioName;
+
+            // 5) Render once. If we overflow budget × 1.5, drop the oldest
+            //    transcript and re-render. Always retain the summary and at
+            //    least the most recent transcript so [刚刚结束的对话] survives.
+            float hardLimit = AITavernConstants.MEMORY_CONTEXT_BUDGET_CHARS
+                * AITavernConstants.MEMORY_CONTEXT_HARD_OVERFLOW_FACTOR;
+            bool truncated = false;
+            string rendered = Render(otherName, summary, transcripts, truncated);
+            int safety = transcripts.Count; // bounded iterations — worst case 1 transcript left
+            while (rendered.Length > hardLimit && transcripts.Count > 1 && safety-- > 0)
             {
-                int idx = (startIdx + i) % PRIOR_MEMORY_MAX_TRANSCRIPTS;
-                sb.Append("---\n").Append(ring[idx]);
-                if (!ring[idx].EndsWith("\n")) sb.Append('\n');
+                transcripts.RemoveAt(0); // drop oldest
+                truncated = true;
+                rendered = Render(otherName, summary, transcripts, truncated);
             }
+            return rendered;
+        }
+
+        // Render the prior-memory block from the resolved inputs. `truncated`
+        // controls whether the "missing earlier history" notice is prepended.
+        static string Render(
+            string otherName,
+            CompactedSummary summary,
+            System.Collections.Generic.List<MemoryEntry> transcripts,
+            bool truncated)
+        {
+            var sb = new StringBuilder();
+            sb.Append("你与 ").Append(otherName).Append(" 的过往：\n");
+
+            if (truncated)
+                sb.Append("（更早的对话因故未能保留）\n");
+
+            if (summary != null)
+            {
+                sb.Append("[较早｜摘要]\n");
+                sb.Append(summary.SummaryText);
+                if (summary.SummaryText == null || !summary.SummaryText.EndsWith("\n"))
+                    sb.Append('\n');
+            }
+
+            if (transcripts.Count > 0)
+            {
+                sb.Append("[较近｜逐字]\n");
+                int last = transcripts.Count - 1;
+                for (int i = 0; i < transcripts.Count; i++)
+                {
+                    // The LAST transcript is preceded by [刚刚结束的对话]; all
+                    // earlier ones use the --- separator. The first transcript
+                    // (when it's NOT also the last) is emitted without a leading
+                    // separator since the [较近｜逐字] header already separates it.
+                    if (i == last)
+                    {
+                        sb.Append("[刚刚结束的对话]\n");
+                    }
+                    else if (i > 0)
+                    {
+                        sb.Append("---\n");
+                    }
+                    var text = transcripts[i].Description;
+                    sb.Append(text);
+                    if (text == null || !text.EndsWith("\n")) sb.Append('\n');
+                }
+            }
+
             return sb.ToString();
         }
 
