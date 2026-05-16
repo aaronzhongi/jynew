@@ -102,6 +102,7 @@ namespace Jyx2.AITavern
             // invite attempt has aged out — fire DoSomething.
             if (conversation == null
                 && !doingActivity
+                && !agent.ToRemember.HasValue   // pending memory write — yield to BRANCH 8
                 && (!pathfinding || !recentlyAttemptedInvite))
             {
                 FireOp(agent, scheduler, now, OperationNames.DoSomething, new DoSomethingArgs());

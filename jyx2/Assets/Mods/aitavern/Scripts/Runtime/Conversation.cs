@@ -158,8 +158,20 @@ namespace Jyx2.AITavern
         {
             if (_stopped) return;
             if (!Participants.ContainsKey(player)) return;
+
+            // If dropping this participant ends the conversation (Phase 1 is
+            // strictly 2-party), run the full Stop() lifecycle BEFORE the
+            // removal so the snapshot still contains BOTH parties. Otherwise
+            // the leaver is excluded from ToRemember / ToRememberPartner /
+            // memory-flush and its post-conversation reflection (Plan §5.3)
+            // never fires — and the remaining party's ToRememberPartner
+            // resolves to default, so its reflection finds no raw/ring either.
+            if (Participants.Count <= 2)
+            {
+                Stop(now);
+                return;
+            }
             Participants.Remove(player);
-            if (Participants.Count < 2) Stop(now);
         }
 
         // T8 lifecycle hand-off (Plan §4.3). Convenience overload routes through
