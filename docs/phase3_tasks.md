@@ -90,7 +90,37 @@ we amend Q3.
 
 Order T3C.1→.2→.3→.4. Commit 3C after .4.
 
-## Phase 3D — decomposed when 3C lands
-(Reflection-consolidation, the centerpiece: ring buffer §5.5.3, salience
-gate, raw-not-decayed deltas, §5.0 global reflection, ImpressionDelta
-overlay, the §5.3 op that finally MOVES emotion/affection on events.)
+## Phase 3C — STATUS: DONE
+
+T3C.1-4 shipped/reviewed, committed 385974554. §10 Q3 amendment
+(RelationType→baseline) ratified by ai-town. §5.4 emotion + §5.5.1
+affection render with read-time decay; affect not yet MOVED by events
+(that's 3D).
+
+## Phase 3D — reflection-consolidation (THE CENTERPIECE)
+
+Plan §5 (whole), §5.1 (ring anchor+last-9, append co-located with
+Conversation.AddMessage), §5.2 (conv-end trigger + mid-conv spill, no
+mid-conv Grok), §5.3 (4-slot consolidation call, salience gate,
+raw-not-decayed deltas, ImpressionDelta, 违背设定 log), §5.3.1 (global
+reflection), §5.4 (MemoryStash generalization — Phase 2 compactor BODY
+replaced, Phase 2 tests REWRITTEN not inherited), §6.1 (ring becomes
+SOLE transcript source → DELETE AppendTranscript; remove Phase 2
+prior-memory block — ends the 3A coexistence), §8.
+
+Biggest behavioral change in all of Phase 3: it flips the Phase 2
+coexistence the existing-impl reviewer flagged in plan-review R2. High
+cross-cutting risk → plan-reviewers monitor the heavy tasks.
+
+| # | Task | Files | Depends | Monitor |
+|---|---|---|---|---|
+| T3D.1 | Schema fill: new `TurnRecord{Speaker,Text,Ms}`; constants `MEMORY_RING_CAP=10`, `AFFECT_DELTA_DEADBAND` (plan §7); fill the deferred seams — `TargetState.ReflectionSummary`/`Ring`(List<TurnRecord>)/`ImpressionDelta`, `RuntimeMindState.GlobalReflection` | RuntimeMindState.cs, AITavernConstants.cs | — | quick |
+| T3D.2 | Ring buffer + spill (§5.1/§5.2): `RingBuffer` logic (pin first turn + last-9; 11th evicts oldest non-anchor → spill to per-pair MemoryStash raw list); **co-locate ring-append with EVERY turn-write** — the NPC turn in AgentGenerateMessageOp AND the player-submit AddMessage site (find it: AgentSimulator/Conversation). Synchronous, no Grok | AgentGenerateMessageOp.cs, AgentSimulator.cs/Conversation.cs (turn-write sites), maybe RingBuffer.cs | T3D.1 | **existing-impl** (turn-path integration; §5.1 no-under-render invariant) |
+| T3D.3 | Reflection op (§5.3) — the centerpiece. Replace MemoryCompactor body / generalize AgentRememberConversationOp: 4-slot prompt (往来印象/情绪变化/好恶变化/违背设定) + re-fold-from-raw spill + parser; write ReflectionSummary; **salience gate** (skip delta apply when \|好恶变化\|<AFFECT_DELTA_DEADBAND ∧ neutral 情绪变化); apply 情绪变化/好恶变化 to Emotion/Affection FROM RAW turns (Value + LastSetMs=now) not decayed; append ImpressionDelta; log 违背设定 | MemoryCompactor.cs, AgentRememberConversationOp.cs | T3D.1,T3D.2 | **ai-town** (salience gate / raw-not-decayed / re-fold-from-raw = their non-negotiables) |
+| T3D.4 | Global reflection (§5.3.1): at conv-end after per-pair fold, if ≥2 non-empty per-pair ReflectionSummary → one extra Grok fold → `RuntimeMindState.GlobalReflection`; flat, cross-pair staleness intentional, NEVER an input to a per-pair fold (no feedback/recursion) | AgentRememberConversationOp.cs | T3D.3 | **ai-town** |
+| T3D.5 | Assembler 3D render + **COEXISTENCE FLIP**: render §5.0 GlobalReflection (above per-target), §5.5.2 ReflectionSummary + §5.5.3 ring under `·对 X·` (after §5.5.1), §4 `［本局所历］` ImpressionDelta overlay; **DELETE `AppendTranscript` from BuildContinue/BuildLeave** (ring is now sole transcript source — safe per §5.1 co-location); **remove the Phase 2 `BuildPriorMemoryBlock` prior-memory block** (ends 3A coexistence). Leave profile = §2+§5.4+§5.5.3 (§6.1) | ContextAssembler.cs, ConversationPrompts.cs, AgentGenerateMessageOp.cs | T3D.1-4 | **existing-impl** (their R2 blocker — no-under-render after deletion; Phase 2 path removal) |
+| T3D.6 | Tests: REWRITE Phase 2 tests asserting FacetSlotPrefixes/old BuildPriorMemoryBlock (§5.4 scheduled) → new 4-slot format; NEW 3D tests — ring anchor+last-9+evict→spill, reflection re-fold-from-raw (prior summary NOT in Grok input), 4-slot parse, salience gate skips trivial, **deltas from RAW not decayed** (§9 regression), ImpressionDelta append + Dossier asset never mutated, 违背设定 log, global fold (≥2, flat, staleness), assembler §5.0/§5.5.2/§5.5.3/overlay, **no-double AND no-under render** after AppendTranscript deletion, Leave §2+§5.4+§5.5.3, final coexistence state | test files | T3D.5 | quick |
+
+Order T3D.1→.2→.3→.4→.5→.6 (.5's AppendTranscript deletion depends on
+.2's §5.1 co-located ring-append — the invariant that makes deletion
+safe). Commit 3D after .6 → Phase 3 complete.

@@ -232,6 +232,13 @@ namespace Jyx2.AITavern.Bridge
                         // the next line, so this is safe.
                         conv.SetIsTyping(human.PlayerId, Guid.NewGuid().ToString("N"), nowAtSubmit);
                         conv.AddMessage(human.PlayerId, text, nowAtSubmit);
+                        // Episodic ring (Plan §5.1 co-location): immediately
+                        // after the player's AddMessage success, on the same
+                        // path. Synchronous, no Grok; all guarded returns so
+                        // it can't throw into the turn-write path. The human
+                        // has no mind (skipped as owner) but is a valid
+                        // talkee key for the NPC participant's ring.
+                        EpisodicRing.Record(Manager, conv, human.PlayerId, text, nowAtSubmit);
                     }
                     catch (Exception e)
                     {

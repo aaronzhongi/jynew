@@ -24,7 +24,6 @@
 // only runs after that gate has fired GenerateMessage.
 
 using System;
-using System.Text;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
@@ -70,16 +69,15 @@ namespace Jyx2.AITavern
             }
             else
             {
-                // Pull prior conversations between these two from MemoryStash
-                // so Start/Continue prompts have continuity context and the model
-                // stops looping on the same opener. Leave-type doesn't need this
-                // — the farewell only depends on the current transcript.
-                string priorMemory = BuildPriorMemoryBlock(mgr, agent.PlayerId, args.OtherPlayerId);
+                // T3D.5 — the coexistence flip (Plan §6.1 / §8): the Phase 2
+                // BuildPriorMemoryBlock prior-memory computation is REMOVED.
+                // Start/Continue continuity context now comes entirely from
+                // the assembler's §5.5.2 ReflectionSummary + §5.5.3 episodic
+                // ring (the §5.5.3 ring also being the sole live-transcript
+                // source — AppendTranscript was deleted from the builders).
 
-                // Phase 3A: thread the agents/mgr/clock through so
-                // ConversationPrompts can PREPEND the ContextAssembler
-                // §1-§4 static block ahead of the retained Phase 2
-                // identity+priorMemory content (Plan §8 coexistence).
+                // Thread the agents/mgr/clock through so ConversationPrompts
+                // can PREPEND the ContextAssembler §1-§5 block (Plan §6).
                 long promptNow = mgr.Clock != null ? mgr.Clock.NowMs() : 0L;
 
                 ConversationPrompts.Built built;
@@ -87,13 +85,11 @@ namespace Jyx2.AITavern
                 {
                     case MessageGenerationType.Start:
                         built = ConversationPrompts.BuildStart(selfBio, otherBio,
-                            talker: agent, talkee: otherAgent, mgr: mgr, now: promptNow,
-                            priorMemory: priorMemory);
+                            talker: agent, talkee: otherAgent, mgr: mgr, now: promptNow);
                         break;
                     case MessageGenerationType.Continue:
                         built = ConversationPrompts.BuildContinue(selfBio, otherBio, conv,
-                            talker: agent, talkee: otherAgent, mgr: mgr, now: promptNow,
-                            priorMemory: priorMemory);
+                            talker: agent, talkee: otherAgent, mgr: mgr, now: promptNow);
                         break;
                     case MessageGenerationType.Leave:
                         built = ConversationPrompts.BuildLeave(selfBio, otherBio, conv,
@@ -144,6 +140,13 @@ namespace Jyx2.AITavern
                 return;
             }
 
+            // ---- Episodic ring (Plan §5.1 co-location) ----
+            // Co-located with the AddMessage success above (NOT inside
+            // Conversation.AddMessage). Synchronous, no Grok; all guarded
+            // returns so it can't throw into the turn path. Skipped on the
+            // catch path above (don't ring a failed add).
+            EpisodicRing.Record(mgr, conv, agent.PlayerId, text, now);
+
             // ---- Render in the bubble UI ----
             try
             {
@@ -166,110 +169,14 @@ namespace Jyx2.AITavern
             }
         }
 
-        // Phase 2 (Plan §4): Build the prior-memory block injected into Start /
-        // Continue system prompts. Pulls the per-pair CompactedSummary plus all
-        // un-folded Conversation MemoryEntries for (self, other), sorted by
-        // EndedAt ascending. The most recent transcript is tagged
-        // [刚刚结束的对话] so the model can distinguish "just happened" from
-        // older history. If the rendered block exceeds the configured budget
-        // (chars × MEMORY_CONTEXT_HARD_OVERFLOW_FACTOR), the oldest un-folded
-        // transcripts are dropped one at a time as a deterministic read-side
-        // soft-truncate fallback. The summary and the most recent transcript
-        // are always retained.
-        internal static string BuildPriorMemoryBlock(AITavernManager mgr, GameId self, GameId other)
-        {
-            if (mgr == null || mgr.Memory == null) return null;
-
-            // 1) Per-pair compacted summary (may be null).
-            var summary = mgr.Memory.GetSummary(self, other);
-
-            // 2) All un-folded Conversation entries for this pair.
-            var transcripts = new System.Collections.Generic.List<MemoryEntry>();
-            foreach (var e in mgr.Memory.ForOwner(self))
-            {
-                if (e.Type != MemoryType.Conversation) continue;       // Relationship / Reflection never belong here.
-                if (!e.Target.HasValue) continue;
-                if (!e.Target.Value.Equals(other)) continue;
-                if (e.IsFolded) continue;                              // Folded content is represented by `summary`.
-                if (string.IsNullOrWhiteSpace(e.Description)) continue;
-                transcripts.Add(e);
-            }
-            transcripts.Sort((a, b) => a.EndedAt.CompareTo(b.EndedAt));
-
-            // 3) Nothing to inject — caller drops the block from the prompt.
-            if (summary == null && transcripts.Count == 0) return null;
-
-            // 4) Resolve the other agent's display name for the header.
-            string otherName = other.Value;
-            var otherAgent = mgr.NPCs != null ? mgr.NPCs.Get(other) : null;
-            if (otherAgent != null && otherAgent.Bio != null && !string.IsNullOrEmpty(otherAgent.Bio.BioName))
-                otherName = otherAgent.Bio.BioName;
-
-            // 5) Render once. If we overflow budget × 1.5, drop the oldest
-            //    transcript and re-render. Always retain the summary and at
-            //    least the most recent transcript so [刚刚结束的对话] survives.
-            float hardLimit = AITavernConstants.MEMORY_CONTEXT_BUDGET_CHARS
-                * AITavernConstants.MEMORY_CONTEXT_HARD_OVERFLOW_FACTOR;
-            bool truncated = false;
-            string rendered = Render(otherName, summary, transcripts, truncated);
-            int safety = transcripts.Count; // bounded iterations — worst case 1 transcript left
-            while (rendered.Length > hardLimit && transcripts.Count > 1 && safety-- > 0)
-            {
-                transcripts.RemoveAt(0); // drop oldest
-                truncated = true;
-                rendered = Render(otherName, summary, transcripts, truncated);
-            }
-            return rendered;
-        }
-
-        // Render the prior-memory block from the resolved inputs. `truncated`
-        // controls whether the "missing earlier history" notice is prepended.
-        static string Render(
-            string otherName,
-            CompactedSummary summary,
-            System.Collections.Generic.List<MemoryEntry> transcripts,
-            bool truncated)
-        {
-            var sb = new StringBuilder();
-            sb.Append("你与 ").Append(otherName).Append(" 的过往：\n");
-
-            if (truncated)
-                sb.Append("（更早的对话因故未能保留）\n");
-
-            if (summary != null)
-            {
-                sb.Append("[较早｜摘要]\n");
-                sb.Append(summary.SummaryText);
-                if (summary.SummaryText == null || !summary.SummaryText.EndsWith("\n"))
-                    sb.Append('\n');
-            }
-
-            if (transcripts.Count > 0)
-            {
-                sb.Append("[较近｜逐字]\n");
-                int last = transcripts.Count - 1;
-                for (int i = 0; i < transcripts.Count; i++)
-                {
-                    // The LAST transcript is preceded by [刚刚结束的对话]; all
-                    // earlier ones use the --- separator. The first transcript
-                    // (when it's NOT also the last) is emitted without a leading
-                    // separator since the [较近｜逐字] header already separates it.
-                    if (i == last)
-                    {
-                        sb.Append("[刚刚结束的对话]\n");
-                    }
-                    else if (i > 0)
-                    {
-                        sb.Append("---\n");
-                    }
-                    var text = transcripts[i].Description;
-                    sb.Append(text);
-                    if (text == null || !text.EndsWith("\n")) sb.Append('\n');
-                }
-            }
-
-            return sb.ToString();
-        }
+        // T3D.6 (Plan §5.4 / §8): the Phase 2 `BuildPriorMemoryBlock`
+        // prior-memory builder and its sole-use `Render` helper were DELETED
+        // here. They had zero callers after T3D.5 stopped computing the block
+        // (the assembler's §5.5.2 ReflectionSummary + §5.5.3 episodic ring are
+        // now the single continuity/transcript source). Their Phase 2 tests
+        // were rewritten to the §5.3 4-slot / 3D reality in the same task.
+        // `StubLine` below is still live (RunAsync's missing-bio / Grok-fail
+        // fallback).
 
         // Fallback canned lines used when bios are missing or Grok fails.
         // Brief and in-character-agnostic so they slot into any persona.

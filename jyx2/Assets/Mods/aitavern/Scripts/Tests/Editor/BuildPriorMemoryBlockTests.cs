@@ -1,148 +1,155 @@
-// T8 (Phase 2): AgentGenerateMessageOp.BuildPriorMemoryBlock editor-mode tests.
+// T3D.6 (Plan §5.3.1 / §5.0 / §9) — REPURPOSED. This file previously tested
+// AgentGenerateMessageOp.BuildPriorMemoryBlock, a Phase 2 method DELETED in
+// T3D.6 (zero callers after T3D.5; the §5.5.2 ReflectionSummary + §5.5.3 ring
+// supersede it — Plan §5.4). Rather than delete the .cs (and its Unity .meta),
+// the file is repurposed into the §5.3.1 cross-person GlobalReflection fold
+// tests (the file/class name is kept solely to avoid Unity .meta churn — the
+// AgentRememberConversationStub.cs precedent).
 //
-// `BuildPriorMemoryBlock` is `internal static`; the test asmdef has access via
-// the InternalsVisibleTo line in Runtime/AssemblyInfo.cs (also added in T8).
-//
-// Verifies Plan §4 read-path layout:
-//   - Header "你与 <other> 的过往：".
-//   - Summary block ([较早｜摘要]) is emitted BEFORE the transcripts block ([较近｜逐字]).
-//   - The newest transcript is tagged [刚刚结束的对话] (counter long-context recency dip).
-//   - Folded entries (IsFolded == true) never appear in the rendered output.
+// FoldGlobalReflection (Plan §5.3.1) is `public static async UniTask` and is
+// driven directly. Invariants under test:
+//   - <2 non-blank Targets[*].ReflectionSummary → GlobalReflection UNTOUCHED
+//     (an existing one is NOT cleared); no Grok call.
+//   - ≥2 → exactly one Grok call; mind.GlobalReflection set.
+//   - Grok throw / empty → mind.GlobalReflection UNCHANGED (best-effort).
+//   - it is OUTPUT-ONLY: it NEVER writes any Targets[*].ReflectionSummary,
+//     and reads CURRENT per-pair summaries (cross-pair staleness intentional).
 using NUnit.Framework;
 
 namespace Jyx2.AITavern.Tests
 {
     [TestFixture]
-    public class BuildPriorMemoryBlockTests
+    public class BuildPriorMemoryBlockTests   // name kept to avoid .meta churn; see header
     {
         AITavernManager _mgr;
-        GameId _huangrong;
+        MockGrokClient _mock;
+        GameId _huangrong;   // the reflecting owner
         GameId _ouyangke;
-        readonly System.Collections.Generic.List<CharacterBio> _spawnedBios =
-            new System.Collections.Generic.List<CharacterBio>();
+        GameId _xiaoer;      // 店小二 — a second talkee so the owner has ≥2 pairs
 
         [SetUp]
         public void SetUp()
         {
             _mgr = TestBuilders.MakeManager(startTimeMs: 1_000_000);
+            _mock = new MockGrokClient();
+            _mgr.Grok = _mock;
             _huangrong = new GameId("huangrong");
             _ouyangke = new GameId("ouyangke");
-            _spawnedBios.Clear();
+            _xiaoer = new GameId("xiaoer");
         }
 
         [TearDown]
         public void TearDown()
         {
-            foreach (var bio in _spawnedBios) TestBuilders.DestroyBio(bio);
-            _spawnedBios.Clear();
             TestBuilders.DestroyManager(_mgr);
         }
 
         // ---------- helpers ----------
 
-        // Registers an agent with a Bio so BuildPriorMemoryBlock can use BioName
-        // in the header. Returns the agent for inline test convenience. The bio
-        // is tracked in _spawnedBios so TearDown can DestroyImmediate it.
-        Agent RegisterAgentWithBio(string id, string bioName)
+        TargetState SeedPairSummary(GameId other, string summary)
         {
-            var bio = TestBuilders.MakeBio(id);
-            bio.BioName = bioName;
-            _spawnedBios.Add(bio);
-            var agent = TestBuilders.MakeAgent(id, bio: bio);
-            _mgr.NPCs.Register(agent);
-            return agent;
+            var mind = _mgr.GetOrCreateMind(_huangrong);
+            var ts = new TargetState { ReflectionSummary = summary };
+            mind.Targets[other] = ts;
+            return ts;
         }
 
-        // ---------- Test 4: summary + transcripts in the right order ----------
+        void Fold(long now) =>
+            MemoryCompactor.FoldGlobalReflection(_mgr, _huangrong, now)
+                .GetAwaiter().GetResult();
+
+        // ---------- Test 1: <2 non-blank summaries → skipped, existing not cleared ----------
 
         [Test]
-        public void BuildPriorMemoryBlock_emitsSummaryThenTranscripts()
+        public void FoldGlobalReflection_fewerThanTwoSummaries_isSkippedAndDoesNotClear()
         {
-            RegisterAgentWithBio("huangrong", "黄蓉");
-            RegisterAgentWithBio("ouyangke", "欧阳克");
+            // Exactly ONE non-blank per-pair summary (+ one blank, doesn't count).
+            SeedPairSummary(_ouyangke, "他屡屡试探木箱");
+            SeedPairSummary(_xiaoer, "   ");   // blank — not counted toward the ≥2 gate
 
-            // Seed a CompactedSummary for the pair.
-            const string summaryText =
-                "关系：警惕\n共同经历：客栈试探\n未解矛盾：无\n关键事实：欧阳克声称无意";
-            _mgr.Memory.SetSummary(new CompactedSummary
-            {
-                PairKey = string.CompareOrdinal("huangrong", "ouyangke") <= 0
-                    ? "huangrong|ouyangke"
-                    : "ouyangke|huangrong",
-                OwnerA = _huangrong,
-                OwnerB = _ouyangke,
-                SummaryText = summaryText,
-                CoveredFromMs = 1,
-                CoveredUntilMs = 2,
-                FoldedEntryCount = 2,
-                CreatedAt = 100,
-            });
+            const string existing = "EXISTING_GLOBAL_SENTINEL 先前的跨人反思";
+            _mgr.GetOrCreateMind(_huangrong).GlobalReflection = existing;
 
-            // Two un-folded transcripts (newest gets the [刚刚结束的对话] marker).
-            _mgr.Memory.AppendConversationMemory(_huangrong, _ouyangke, "黄蓉：第一段对话\n欧阳克：回应一", 1_000_000);
-            _mgr.Memory.AppendConversationMemory(_huangrong, _ouyangke, "黄蓉：第二段对话\n欧阳克：回应二", 1_001_000);
+            Fold(1_002_000);
 
-            string s = AgentGenerateMessageOp.BuildPriorMemoryBlock(_mgr, _huangrong, _ouyangke);
-            Assert.IsNotNull(s, "block must render when summary + transcripts exist");
-
-            // Header includes the other agent's BioName.
-            StringAssert.Contains("你与 欧阳克 的过往：", s);
-
-            // Summary header + its text.
-            StringAssert.Contains("[较早｜摘要]", s);
-            StringAssert.Contains(summaryText, s);
-
-            // Transcripts header + recency marker.
-            StringAssert.Contains("[较近｜逐字]", s);
-            StringAssert.Contains("[刚刚结束的对话]", s);
-
-            // Ordering: summary block appears BEFORE the transcripts block.
-            int summaryIdx = s.IndexOf("[较早｜摘要]", System.StringComparison.Ordinal);
-            int transcriptsIdx = s.IndexOf("[较近｜逐字]", System.StringComparison.Ordinal);
-            Assert.AreNotEqual(-1, summaryIdx);
-            Assert.AreNotEqual(-1, transcriptsIdx);
-            Assert.Less(summaryIdx, transcriptsIdx, "summary block must precede transcripts block");
-
-            // The [刚刚结束的对话] marker is on the LAST (newest) transcript — so it
-            // sits AFTER the second transcript's header content.
-            int recencyIdx = s.IndexOf("[刚刚结束的对话]", System.StringComparison.Ordinal);
-            int firstTranscriptIdx = s.IndexOf("黄蓉：第一段对话", System.StringComparison.Ordinal);
-            int secondTranscriptIdx = s.IndexOf("黄蓉：第二段对话", System.StringComparison.Ordinal);
-            Assert.AreNotEqual(-1, recencyIdx);
-            Assert.AreNotEqual(-1, firstTranscriptIdx);
-            Assert.AreNotEqual(-1, secondTranscriptIdx);
-            Assert.Less(firstTranscriptIdx, recencyIdx, "first transcript appears BEFORE recency marker");
-            Assert.Less(recencyIdx, secondTranscriptIdx, "recency marker tags the last (newest) transcript");
+            Assert.AreEqual(0, _mock.CompletionCallCount,
+                "<2 non-blank per-pair summaries → no global Grok call (Plan §5.3.1 ≥2 gate)");
+            Assert.AreEqual(existing, _mgr.GetOrCreateMind(_huangrong).GlobalReflection,
+                "an existing GlobalReflection is NOT cleared when the gate fails (Plan §5.3.1)");
         }
 
-        // ---------- Test 5: folded entries are skipped ----------
+        // ---------- Test 2: ≥2 → one Grok call, GlobalReflection set ----------
 
         [Test]
-        public void BuildPriorMemoryBlock_skipsFoldedEntries()
+        public void FoldGlobalReflection_twoOrMoreSummaries_setsGlobalReflection()
         {
-            RegisterAgentWithBio("huangrong", "黄蓉");
-            RegisterAgentWithBio("ouyangke", "欧阳克");
+            SeedPairSummary(_ouyangke, "他屡屡试探木箱、回避正面问话");
+            SeedPairSummary(_xiaoer, "他对木箱欲言又止，神色慌张");
 
-            // Three entries — mark the oldest two as folded. No summary set
-            // (deliberately tests the unusual "folded entries without summary" path).
-            _mgr.Memory.AppendConversationMemory(_huangrong, _ouyangke, "最旧的对话内容OLDEST", 1_000_000);
-            _mgr.Memory.AppendConversationMemory(_huangrong, _ouyangke, "中间的对话内容MIDDLE", 1_001_000);
-            _mgr.Memory.AppendConversationMemory(_huangrong, _ouyangke, "最新的对话内容NEWEST", 1_002_000);
+            const string global = "在场众人皆回避木箱话题，各怀心事";
+            _mock.Responses.Enqueue(global);
 
-            // Locate the entries we just appended (last 3) — order in Entries is
-            // insertion order from AppendConversationMemory.
-            int n = _mgr.Memory.Entries.Count;
-            _mgr.Memory.Entries[n - 3].IsFolded = true;  // oldest
-            _mgr.Memory.Entries[n - 2].IsFolded = true;  // middle
-            // newest stays unfolded.
+            Fold(1_002_000);
 
-            string s = AgentGenerateMessageOp.BuildPriorMemoryBlock(_mgr, _huangrong, _ouyangke);
-            Assert.IsNotNull(s);
+            Assert.AreEqual(1, _mock.CompletionCallCount, "≥2 summaries → exactly one global Grok fold");
+            Assert.AreEqual(global, _mgr.GetOrCreateMind(_huangrong).GlobalReflection,
+                "mind.GlobalReflection set from the global fold output");
+        }
 
-            StringAssert.Contains("最新的对话内容NEWEST", s);
-            Assert.IsFalse(s.Contains("最旧的对话内容OLDEST"), "folded oldest must not appear");
-            Assert.IsFalse(s.Contains("中间的对话内容MIDDLE"), "folded middle must not appear");
-            StringAssert.Contains("[刚刚结束的对话]", s);
+        // ---------- Test 3: output-only — never writes any Targets[*].ReflectionSummary ----------
+
+        [Test]
+        public void FoldGlobalReflection_isOutputOnly_neverWritesPerPairSummaries()
+        {
+            const string sumA = "对欧阳克：他屡屡试探木箱";
+            const string sumB = "对店小二：他神色慌张";
+            var tsA = SeedPairSummary(_ouyangke, sumA);
+            var tsB = SeedPairSummary(_xiaoer, sumB);
+
+            _mock.Responses.Enqueue("众人皆回避木箱");
+
+            Fold(1_002_000);
+
+            Assert.AreEqual(sumA, tsA.ReflectionSummary,
+                "per-pair ReflectionSummary[ouyangke] is NEVER written by the global fold (output-only)");
+            Assert.AreEqual(sumB, tsB.ReflectionSummary,
+                "per-pair ReflectionSummary[xiaoer] is NEVER written by the global fold (output-only)");
+        }
+
+        // ---------- Test 4: Grok throw → GlobalReflection unchanged (best-effort) ----------
+
+        [Test]
+        public void FoldGlobalReflection_grokThrows_leavesGlobalReflectionUnchanged()
+        {
+            SeedPairSummary(_ouyangke, "他屡屡试探木箱");
+            SeedPairSummary(_xiaoer, "他神色慌张");
+
+            const string existing = "PRE_EXISTING_GLOBAL 先前折出的跨人反思";
+            _mgr.GetOrCreateMind(_huangrong).GlobalReflection = existing;
+            _mock.ThrowOnCall = true;
+
+            Fold(1_002_000);
+
+            Assert.AreEqual(existing, _mgr.GetOrCreateMind(_huangrong).GlobalReflection,
+                "a failed global fold must NOT corrupt/clear the existing GlobalReflection (Plan §5.3.1 best-effort)");
+        }
+
+        // ---------- Test 5: Grok empty → GlobalReflection unchanged ----------
+
+        [Test]
+        public void FoldGlobalReflection_grokEmpty_leavesGlobalReflectionUnchanged()
+        {
+            SeedPairSummary(_ouyangke, "他屡屡试探木箱");
+            SeedPairSummary(_xiaoer, "他神色慌张");
+
+            const string existing = "PRE_EXISTING_GLOBAL_2";
+            _mgr.GetOrCreateMind(_huangrong).GlobalReflection = existing;
+            _mock.Responses.Enqueue("   ");
+
+            Fold(1_002_000);
+
+            Assert.AreEqual(existing, _mgr.GetOrCreateMind(_huangrong).GlobalReflection,
+                "empty global-fold response leaves the existing GlobalReflection intact");
         }
     }
 }

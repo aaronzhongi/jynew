@@ -1,23 +1,14 @@
-// Phase 3A (Plan §6) — ContextAssembler: the layered human-like memory
-// context builder. This sub-phase ships the STATIC spine only: §1 World
-// Codex, §2 Talker Bio, §3 Talkee first-impression surface, §4 long-term
-// knowledge (the talker's Dossier view of the talkee). Deterministic,
+// Phase 3 (Plan §6) — ContextAssembler: the layered human-like memory
+// context builder, and (post-3D coexistence flip, Plan §8) the SOLE
+// continuity/transcript source — the Phase 2 BuildPriorMemoryBlock path
+// has been removed. Emits, in order: §1 World Codex, §2 Talker Bio,
+// §3 Talkee first-impression surface, §4 long-term knowledge (the
+// talker's Dossier view of the talkee), §5 short-term (situation / task /
+// surroundings / emotion), §5.0 global reflection, and §5.5 per-target
+// block (current affect + settled impression + the episodic ring, where
+// the just-ended turn surfaces as ［刚刚结束的对话］). Deterministic,
 // synchronous, ZERO Grok calls (all Grok work is offline in the lore
 // pipeline — T3A.6 — or in the 3D reflection op).
-//
-// SCOPE FENCE (Plan §8 internal sub-phasing):
-//   - 3A = static §1-§4 ONLY. §5 short-term (situation/task/surroundings/
-//     emotion), the episodic ring, decay, reflection, ImpressionDelta
-//     overlay, the §5.0 global reflection — ALL deferred to 3B-3D. This
-//     file emits NO §5 placeholder; a fresh game with no World/Dossier
-//     assets yet produces an empty assembler block and the conversation
-//     still runs on the retained Phase 2 memory path (coexistence, §8).
-//   - The `// 3B:` / `// 3D:` markers below pin exactly where the later
-//     layers slot in so the next sub-phase has an unambiguous seam.
-//
-// COEXISTENCE (Plan §8, CRITICAL): in 3A this static block is PREPENDED
-// alongside the retained Phase 2 BuildPriorMemoryBlock memory path — it
-// does NOT replace it. The Phase 2 path is removed only in 3D.
 //
 // ANTI-OMNISCIENCE (Plan §6.2): §3 is built by a private helper whose
 // signature physically CANNOT accept the talkee's Personality / Identity /
@@ -82,26 +73,31 @@ namespace Jyx2.AITavern
                 // `now` threaded in for §5.4's read-time exp decay.
                 AppendSection(sb, BuildShortTerm(talker, mgr, now), AITavernConstants.SECT_SHORTTERM_BUDGET);
 
-                // §5.5.1 affection — the talker's CURRENT好恶 toward THIS
-                // talkee (decays toward the canon relationship baseline,
-                // read-time via Affect.Current(now)). Full-profile ONLY:
-                // Plan §6.1's lean Leave list is "§2+§5.4+§5.5.3" — §5.5.1
-                // is NOT in it (Leave gets the §5.5.3 ring only, which is
-                // 3D), so affection stays Full-only for 3C. Starts the §5.5
-                // per-target area; emitted under its own `·对 X·` header,
-                // omitted entirely (no bare header) when there is no target
-                // entry or no Affection (the 3C norm until 3D appraisal).
-                AppendSection(sb, AffectionBlock(talker, talkee, mgr, now), AITavernConstants.SECT_SHORTTERM_BUDGET);
+                // §5.0 跨人反思 — the talker's cross-person global
+                // reflection. Plan §5.3.1 / §1 mock: rendered ABOVE the
+                // §5.5 per-target area and AFTER §5.1-5.4 short-term.
+                // Full-profile ONLY: Plan §6.1's lean Leave list is
+                // "§2+§5.4+§5.5.3" — §5.0 is explicitly excluded there.
+                // Read-only; omitted entirely when no mind or
+                // GlobalReflection is blank (Plan §1 empty-omission).
+                AppendSection(sb, GlobalReflectionBlock(talker, mgr), AITavernConstants.SECT_SHORTTERM_BUDGET);
 
-                // 3C done (§5.4 emotion folded into BuildShortTerm; §5.5.1
-                //     affection rendered above, Full-only).
-                // 3D: §5.0 global reflection slots BEFORE the §5.5 per-target
-                //     area; §5.5.2 reflection summary + §5.5.3 episodic ring
-                //     append under the SAME `·对 X·` header AffectionBlock
-                //     opens (see the // 3D seam inside AffectionBlock). The
-                //     ring becomes the SOLE transcript source — that is when
-                //     ConversationPrompts.BuildContinue's AppendTranscript is
-                //     deleted (Plan §6.1). In 3A/3C AppendTranscript STAYS.
+                // §5.5 per-target area: §5.5.1 当下好恶 + §5.5.2 往来印象
+                // （已沉淀）+ §5.5.3 最近交谈 ring, ALL under ONE `·对 X·`
+                // header. Full-profile ONLY for §5.5.1/§5.5.2 (Plan §6.1's
+                // lean Leave list is "§2+§5.4+§5.5.3" — Leave gets just the
+                // §5.5.3 ring, slotted in the Leave branch below). Emitted
+                // under its own `·对 X·` header; omitted entirely (no bare
+                // header) only when ALL THREE (affection + summary + ring)
+                // are empty. Read-only (TryGetValue, never GetOrCreateMind).
+                AppendSection(sb, PerTargetBlock(talker, talkee, mgr, now), AITavernConstants.SECT_SHORTTERM_BUDGET);
+
+                // 3D done (§5.0 global reflection rendered above, Full-only;
+                //     §5.5.1+§5.5.2+§5.5.3 folded into PerTargetBlock under
+                //     one ·对 X· header; §4 ［本局所历］ overlay in
+                //     BuildLongTerm). The §5.5.3 ring is now the SOLE
+                //     transcript source — ConversationPrompts.BuildContinue/
+                //     BuildLeave's AppendTranscript is DELETED (Plan §6.1).
             }
             else // ContextProfile.Leave
             {
@@ -125,8 +121,18 @@ namespace Jyx2.AITavern
                 // 3D appraisal first sets Emotion.
                 AppendSection(sb, EmotionOnlyBlock(talker, mgr, now), AITavernConstants.SECT_SHORTTERM_BUDGET);
 
-                // 3C done (§5.4 emotion-only block rendered above for Leave).
-                // 3D: §5.5.3 episodic ring slots here (Leave profile).
+                // §5.5.3 episodic ring (Leave profile) — Plan §6.1's lean
+                // farewell list is "§2+§5.4+§5.5.3": Leave gets the ring so
+                // the goodbye knows "what was just said", but NOT §5.0 /
+                // §5.5.1 affection / §5.5.2 summary. Ring-only sub-block
+                // under a minimal `·对 X·` header; omitted when ring empty.
+                // This is the SOLE transcript source for Leave (the deleted
+                // BuildLeave AppendTranscript). Read-only.
+                AppendSection(sb, RingOnlyBlock(talker, talkee, mgr), AITavernConstants.SECT_SHORTTERM_BUDGET);
+
+                // 3D done (§5.4 emotion-only above; §5.5.3 ring-only block
+                //     rendered above for Leave — no §5.0/§5.5.1/§5.5.2 per
+                //     Plan §6.1 lean farewell list).
             }
 
             return sb.ToString();
@@ -377,6 +383,8 @@ namespace Jyx2.AITavern
 
         static string BuildLongTerm(Agent talker, Agent talkee, AITavernManager mgr)
         {
+            // (talker, talkee) are also threaded for the §4 runtime overlay
+            // below — the canon dossier read is unchanged, by talkerId.
             if (mgr == null || mgr.Dossiers == null) return null;
             string talkerId = talker != null ? talker.AgentId.Value : null;
             if (string.IsNullOrEmpty(talkerId)) return null;
@@ -428,13 +436,32 @@ namespace Jyx2.AITavern
                 if (!string.IsNullOrWhiteSpace(pv.SharedHistory))
                     sb.Append("\n  旧事：").Append(pv.SharedHistory.Trim());
 
-                // 3D: ImpressionDelta overlay goes here — the runtime
-                // ［本局所历］ line is sourced from
-                // RuntimeMindState.Targets[talkee].ImpressionDelta (Plan
-                // §4 overlay / §5.3). In 3A there is no RuntimeMindState,
-                // so the overlay is ALWAYS empty → the ［本局所历］ line is
-                // omitted entirely (Plan §1: empty sub-lines contribute
-                // nothing). The // 3D marker pins the exact seam.
+                // 3D done: §4 ［本局所历］ runtime overlay (Plan §4 overlay /
+                // §5.3). Sourced from the talker's
+                // RuntimeMindState.Targets[talkee].ImpressionDelta — the
+                // mutable runtime delta layered OVER the immutable canon
+                // PersonView.Impression above. READ-ONLY: TryGetValue on
+                // mgr.Minds, NEVER GetOrCreateMind / no writes; the
+                // CharacterDossier asset is NEVER read or written here. Key:
+                // mind by talker.PlayerId, target by talkee.PlayerId — the
+                // SAME keying T3C.2/T3D.2 seed with. Emitted AFTER the canon
+                // impression/relationship lines for this person; omitted
+                // entirely when blank (Plan §1 empty sub-line omission).
+                if (mgr.Minds != null && talker != null && talkee != null)
+                {
+                    RuntimeMindState mind;
+                    if (mgr.Minds.TryGetValue(talker.PlayerId, out mind)
+                        && mind != null && mind.Targets != null)
+                    {
+                        TargetState tts;
+                        if (mind.Targets.TryGetValue(talkee.PlayerId, out tts)
+                            && tts != null
+                            && !string.IsNullOrWhiteSpace(tts.ImpressionDelta))
+                        {
+                            sb.Append("\n  ［本局所历］：").Append(tts.ImpressionDelta.Trim());
+                        }
+                    }
+                }
 
                 any = true;
             }
@@ -597,20 +624,50 @@ namespace Jyx2.AITavern
             return "【眼前局势 — 短期记忆】\n" + emotion;
         }
 
-        // ---- §5.5.1 affection (decaying, SECT_SHORTTERM_BUDGET) ----
+        // ---- §5.0 global cross-person reflection (SECT_SHORTTERM_BUDGET) ----
 
-        // §5.5 per-target area, opening with §5.5.1 当下好恶: the talker's
-        // CURRENT affect toward THIS talkee, decaying at read-time toward the
-        // CANON relationship baseline (NOT 0) via Affect.Current(now) (Plan
-        // §4.4). Full-profile ONLY (Plan §6.1 lean Leave = §2+§5.4+§5.5.3;
-        // §5.5.1 is not in that list). READ-ONLY: TryGetValue on the talker's
-        // mind + Targets, NEVER GetOrCreateMind / no writes. Returns null —
-        // whole block omitted, NO bare `·对 X·` header — when there is no
-        // mind / no Targets / no entry for this talkee / no Affection (the
-        // 3C norm until 3D appraisal seeds affection). Signed value to 2dp
-        // with InvariantCulture (determinism). Matches the §1 mock shape
-        // ("·对 欧阳克·" / "当下好恶：…（…，向长期基线缓回）").
-        static string AffectionBlock(Agent talker, Agent talkee, AITavernManager mgr, long now)
+        // §5.0 跨人反思: the talker's flat cross-person fold (Plan §5.3.1).
+        // Rendered ABOVE the §5.5 per-target area (Build, Full-profile ONLY —
+        // Plan §6.1's lean Leave list excludes it). READ-ONLY: TryGetValue on
+        // mgr.Minds, NEVER GetOrCreateMind / no writes / no Grok (the fold is
+        // produced offline-of-render by the T3D.3 conv-end op). Returns null —
+        // section omitted — when no mind or GlobalReflection is blank (Plan §1
+        // empty-omission). Matches the §1 mock: "此间众人，我之所察（跨人反
+        // 思）：" then the reflection prose on the next line.
+        static string GlobalReflectionBlock(Agent talker, AITavernManager mgr)
+        {
+            if (talker == null || mgr == null || mgr.Minds == null) return null;
+
+            RuntimeMindState mind;
+            if (!mgr.Minds.TryGetValue(talker.PlayerId, out mind) || mind == null)
+                return null;
+            if (string.IsNullOrWhiteSpace(mind.GlobalReflection)) return null;
+
+            return "此间众人，我之所察（跨人反思）：\n" + mind.GlobalReflection.Trim();
+        }
+
+        // ---- §5.5 per-target area (SECT_SHORTTERM_BUDGET) ----
+
+        // The §5.5 per-target block under ONE `·对 X·` header, folding:
+        //   §5.5.1 当下好恶 — the talker's CURRENT affect toward THIS talkee,
+        //          decaying at read-time toward the CANON relationship
+        //          baseline (NOT 0) via Affect.Current(now) (Plan §4.4);
+        //   §5.5.2 往来印象（已沉淀）— the durable per-pair ReflectionSummary
+        //          (Plan §5.5.2; backed by Phase 2 CompactedSummary.SummaryText);
+        //   §5.5.3 最近交谈 — the episodic ring (anchor + last-9), oldest→
+        //          newest, the LAST line tagged ［刚刚结束的对话］ (Plan
+        //          §5.5.3 / §1 mock; mirrors the Phase 2 [刚刚结束的对话]
+        //          convention). The ring is the SOLE transcript source after
+        //          T3D.5 (BuildContinue/BuildLeave AppendTranscript deleted).
+        // Full-profile ONLY (Plan §6.1 lean Leave = §2+§5.4+§5.5.3; Leave
+        // gets just the §5.5.3 ring, via RingOnlyBlock). READ-ONLY: TryGetValue
+        // on the talker's mind + Targets, NEVER GetOrCreateMind / no writes.
+        // Returns null — whole block omitted, NO bare `·对 X·` header — ONLY
+        // when ALL THREE of §5.5.1 affection / §5.5.2 summary / §5.5.3 ring
+        // are empty (so a brand-new pair with only a ring still renders the
+        // ·对 X· block with §5.5.3). Signed affection value to 2dp with
+        // InvariantCulture (determinism). Matches the §1 mock shape.
+        static string PerTargetBlock(Agent talker, Agent talkee, AITavernManager mgr, long now)
         {
             if (talker == null || talkee == null || mgr == null || mgr.Minds == null) return null;
 
@@ -618,38 +675,121 @@ namespace Jyx2.AITavern
             if (!mgr.Minds.TryGetValue(talker.PlayerId, out mind) || mind == null) return null;
             if (mind.Targets == null) return null;
 
-            // Key on talkee.PlayerId — the SAME GameId the FSM (T3C.2) seeds
-            // target entries with. Read-only lookup, never create.
+            // Key on talkee.PlayerId — the SAME GameId the FSM (T3C.2) and
+            // the ring-append (T3D.2) seed target entries with. Read-only
+            // lookup, never create.
             TargetState ts;
             if (!mind.Targets.TryGetValue(talkee.PlayerId, out ts) || ts == null) return null;
-            if (ts.Affection == null) return null;   // no affect for this pair → omit
 
-            float cur = ts.Affection.Current(now);
-            // Signed (e.g. "-0.55"); "+" not prefixed on positives to match
-            // the §1 mock's bare/negative form. InvariantCulture → "."/"-".
-            string val = cur.ToString("0.00", CultureInfo.InvariantCulture);
+            bool hasAffection = ts.Affection != null;
+            bool hasSummary = !string.IsNullOrWhiteSpace(ts.ReflectionSummary);
+            bool hasRing = ts.Ring != null && ts.Ring.Count > 0;
 
-            // Talkee display name: prefer the authored Bio name, else the id.
-            var talkeeBio = talkee.Bio;
-            string name = talkeeBio != null && !string.IsNullOrWhiteSpace(talkeeBio.BioName)
-                ? talkeeBio.BioName.Trim()
-                : talkee.PlayerId.Value;
+            // ALL THREE empty → omit the whole block (NO bare ·对 X· header).
+            if (!hasAffection && !hasSummary && !hasRing) return null;
 
             var sb = new StringBuilder();
-            sb.Append("·对 ").Append(name).Append('·');
-            string label = ts.Affection.Label;
-            if (string.IsNullOrWhiteSpace(label))
-                sb.Append("\n当下好恶：").Append(val).Append("（向长期基线缓回）");
-            else
-                sb.Append("\n当下好恶：").Append(val)
-                  .Append('（').Append(label.Trim()).Append("，向长期基线缓回）");
+            sb.Append("·对 ").Append(TalkeeName(talkee)).Append('·');
 
-            // 3D: §5.5.2 reflection summary + §5.5.3 episodic ring append
-            //     under THIS ·对 X· header (TargetState.ReflectionSummary /
-            //     Ring — declared in 3D; need TurnRecord + MEMORY_RING_CAP).
-            //     §5.0 global reflection slots BEFORE this block in Build.
+            // §5.5.1 当下好恶 (read-time decayed; omitted if no Affection).
+            if (hasAffection)
+            {
+                float cur = ts.Affection.Current(now);
+                // Signed (e.g. "-0.55"); "+" not prefixed on positives to
+                // match the §1 mock's bare/negative form. InvariantCulture.
+                string val = cur.ToString("0.00", CultureInfo.InvariantCulture);
+                string label = ts.Affection.Label;
+                if (string.IsNullOrWhiteSpace(label))
+                    sb.Append("\n当下好恶：").Append(val).Append("（向长期基线缓回）");
+                else
+                    sb.Append("\n当下好恶：").Append(val)
+                      .Append('（').Append(label.Trim()).Append("，向长期基线缓回）");
+            }
+
+            // §5.5.2 往来印象（已沉淀）(omitted if blank).
+            if (hasSummary)
+                sb.Append("\n往来印象（已沉淀）：").Append(ts.ReflectionSummary.Trim());
+
+            // §5.5.3 最近交谈 ring (omitted if empty).
+            if (hasRing)
+                AppendRing(sb, ts.Ring, talker, talkee);
 
             return sb.ToString();
+        }
+
+        // §5.5.3 ring-only block for the Leave profile (Plan §6.1's lean
+        // farewell = §2+§5.4+§5.5.3): Leave gets the ring so the goodbye
+        // knows "what was just said", but NOT §5.0 / §5.5.1 / §5.5.2. The
+        // ring is rendered under the SAME minimal `·对 X·` header so the
+        // 最近交谈 sub-block reads identically to the Full profile. READ-ONLY
+        // (TryGetValue, never GetOrCreateMind). Returns null — whole block
+        // omitted, NO bare header — when the ring is empty. This is the SOLE
+        // transcript source for Leave (the deleted BuildLeave AppendTranscript).
+        static string RingOnlyBlock(Agent talker, Agent talkee, AITavernManager mgr)
+        {
+            if (talker == null || talkee == null || mgr == null || mgr.Minds == null) return null;
+
+            RuntimeMindState mind;
+            if (!mgr.Minds.TryGetValue(talker.PlayerId, out mind) || mind == null) return null;
+            if (mind.Targets == null) return null;
+
+            TargetState ts;
+            if (!mind.Targets.TryGetValue(talkee.PlayerId, out ts) || ts == null) return null;
+            if (ts.Ring == null || ts.Ring.Count == 0) return null;   // ring empty → omit
+
+            var sb = new StringBuilder();
+            sb.Append("·对 ").Append(TalkeeName(talkee)).Append('·');
+            AppendRing(sb, ts.Ring, talker, talkee);
+            return sb.ToString();
+        }
+
+        // Render the §5.5.3 最近交谈 ring onto `sb` (oldest→newest). The LAST
+        // line is preceded by ［刚刚结束的对话］ on its own line so the model
+        // can tell "just said" from older buffered turns (Plan §1 mock +
+        // mirrors the Phase 2 BuildPriorMemoryBlock [刚刚结束的对话]
+        // convention). Speaker name resolves via the SAME BioName/id logic
+        // PerTargetBlock/BuildLongTerm use: a turn spoken by the talkee uses
+        // the talkee's display name; any other speaker (the talker's own
+        // turns) uses the talker's. Caller guarantees ring is non-empty.
+        static void AppendRing(StringBuilder sb, List<TurnRecord> ring, Agent talker, Agent talkee)
+        {
+            sb.Append("\n最近交谈（最近").Append(ring.Count).Append("轮）：");
+            int last = ring.Count - 1;
+            for (int i = 0; i < ring.Count; i++)
+            {
+                var rec = ring[i];
+                if (rec == null) continue;
+                if (i == last)
+                    sb.Append("\n［刚刚结束的对话］");
+                sb.Append('\n').Append(SpeakerName(rec.Speaker, talker, talkee))
+                  .Append('：').Append(rec.Text);
+            }
+        }
+
+        // Talkee display name: prefer the authored Bio name, else the id —
+        // the SAME resolution AffectionBlock used pre-3D and BuildLongTerm
+        // uses for 此人.
+        static string TalkeeName(Agent talkee)
+        {
+            var bio = talkee != null ? talkee.Bio : null;
+            return bio != null && !string.IsNullOrWhiteSpace(bio.BioName)
+                ? bio.BioName.Trim()
+                : (talkee != null ? talkee.PlayerId.Value : "?");
+        }
+
+        // Resolve a TurnRecord.Speaker GameId to a display name. 2-party
+        // (Phase 1): the speaker is either the talkee or the talker. A turn
+        // whose Speaker == talkee.PlayerId uses the talkee's name; everything
+        // else (the talker's own turns) uses the talker's name. Same
+        // BioName/id fallback as TalkeeName.
+        static string SpeakerName(GameId speaker, Agent talker, Agent talkee)
+        {
+            if (talkee != null && speaker.Equals(talkee.PlayerId))
+                return TalkeeName(talkee);
+            var bio = talker != null ? talker.Bio : null;
+            if (bio != null && !string.IsNullOrWhiteSpace(bio.BioName))
+                return bio.BioName.Trim();
+            return talker != null ? talker.PlayerId.Value : (speaker.Value ?? "?");
         }
     }
 }

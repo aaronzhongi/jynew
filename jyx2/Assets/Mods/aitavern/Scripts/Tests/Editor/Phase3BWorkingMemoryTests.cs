@@ -335,10 +335,17 @@ namespace Jyx2.AITavern.Tests
             Assert.Less(lt, st, "§4 before §5 (Plan §1 fixed order: §4 long-term → §5 short-term)");
         }
 
-        // ---------- Test 9: 3B coexistence at the ConversationPrompts seam ----------
+        // ---------- Test 9: 3D final state — §5 short-term renders ALONGSIDE
+        //                    the §5.5.3 ring; ring is the sole transcript source ----------
 
+        // REWRITTEN from the old 3B-coexistence test (T3D.6, Plan §5.4/§8).
+        // T3D.5 removed the Phase 2 prior-memory path (superseded by §5.5.2
+        // ReflectionSummary + §5.5.3 ring). The assembler block is now the SOLE
+        // context. This file's domain focus: §5 working-memory (处境/目标/环境)
+        // STILL renders alongside the live-turn §5.5.3 ring, the live turn
+        // seeded through the REAL path EpisodicRing.Record (NOT conv.Transcript).
         [Test]
-        public void Coexistence_ShortTerm_Phase2Intact()
+        public void Coexistence_ShortTerm_RendersAlongsideRing()
         {
             _mgr.World = MakeWorld();
 
@@ -352,27 +359,44 @@ namespace Jyx2.AITavern.Tests
 
             var talker = TestBuilders.MakeAgent("huangrong", bio: selfBio);
             var talkee = TestBuilders.MakeAgent("ouyangke", bio: otherBio);
+            _mgr.NPCs.Register(talker);
+            _mgr.NPCs.Register(talkee);
 
             var mind = _mgr.GetOrCreateMind(talker.PlayerId);
-            mind.Situation = "避追兵于客栈";
-            mind.Task = "辨明谁可信";
+            mind.Situation = "避追兵于客栈SITU_SENTINEL";
+            mind.Task = "辨明谁可信TASK_SENTINEL";
 
-            const string priorMem = "PRIOR_MEM_SENTINEL";
+            var conv = new Conversation();
+            conv.Participants[talker.PlayerId] = new ConversationMember { Status = MemberStatusKind.Participating };
+            conv.Participants[talkee.PlayerId] = new ConversationMember { Status = MemberStatusKind.Participating };
+            const string liveTurn = "你到底想做什么LIVE_TURN_SENTINEL";
+            EpisodicRing.Record(_mgr, conv, talker.PlayerId, liveTurn, 1_000_500);
 
-            var start = ConversationPrompts.BuildStart(
-                selfBio, otherBio, talker, talkee, _mgr, now: 1_000_000, priorMemory: priorMem);
-            string sp = start.SystemPrompt;
+            var cont = ConversationPrompts.BuildContinue(
+                selfBio, otherBio, conv, talker, talkee, _mgr, now: 1_001_000);
+            string sp = cont.SystemPrompt;
 
-            StringAssert.Contains(H_SHORTTERM, sp,
-                "assembler §5 short-term block present in the Start prompt");
-            StringAssert.Contains(priorMem, sp,
-                "Phase 2 prior-memory path STILL intact (3B coexistence, Plan §8)");
-            int asmIdx = Idx(sp, H_SELF);   // assembler block start (§2 always present)
-            int memIdx = Idx(sp, priorMem);
-            Assert.Greater(asmIdx, -1, "assembler block present");
-            Assert.Greater(memIdx, -1, "Phase 2 prior-memory block present");
-            Assert.Less(asmIdx, memIdx,
-                "assembler static block (incl. §5) is PREPENDED before the Phase 2 content");
+            // §5 short-term STILL renders (this file's domain focus) ...
+            StringAssert.Contains(H_SHORTTERM, sp, "§5 short-term block present");
+            StringAssert.Contains("SITU_SENTINEL", sp, "§5.1 处境 still renders");
+            StringAssert.Contains("TASK_SENTINEL", sp, "§5.2 目标 still renders");
+            // ... ALONGSIDE the §5.5.3 ring carrying the live turn (no
+            // under-render), exactly once (no double-render — T3D.5).
+            StringAssert.Contains(liveTurn, sp, "live turn via the §5.5.3 ring (no under-render)");
+            int occ = 0, idx = 0;
+            while ((idx = sp.IndexOf(liveTurn, idx, StringComparison.Ordinal)) >= 0) { occ++; idx += liveTurn.Length; }
+            Assert.AreEqual(1, occ, "live turn appears EXACTLY ONCE (ring is sole transcript source)");
+            StringAssert.Contains("［刚刚结束的对话］", sp, "ring tags the newest turn");
+
+            // Removed Phase 2 paths leave no trace; assembler + anti-repeat KEPT.
+            Assert.IsFalse(sp.Contains("PRIOR_MEM_SENTINEL"), "no Phase 2 priorMemory path");
+            Assert.IsFalse(sp.Contains("Conversation so far:"), "no Phase 2 live-transcript header");
+            int asmIdx = Idx(sp, H_SELF);
+            int shortIdx = Idx(sp, H_SHORTTERM);
+            Assert.Greater(asmIdx, -1, "assembler block present (PrependAssembler intact)");
+            Assert.Less(asmIdx, shortIdx, "§2 precedes §5 within the assembler block (fixed order)");
+            StringAssert.Contains("不要复述上面已有的对话内容", sp,
+                "the Phase 2 Chinese anti-repeat tail is KEPT");
         }
 
         // ---------- Test 10: §5 truncated to its char budget ----------

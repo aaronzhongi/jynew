@@ -29,18 +29,19 @@ namespace Jyx2.AITavern
             public List<(string role, string content)> Messages;
         }
 
-        // Phase 3A coexistence (Plan §8, CRITICAL): the ContextAssembler
-        // §1-§4 static block is PREPENDED before the existing Phase 2
-        // identity + prior-memory content. Nothing Phase 2 is removed —
-        // BuildPriorMemoryBlock, the live-transcript AppendTranscript, and
-        // the anti-repeat tail all STAY. §6.1's "delete AppendTranscript"
-        // is a 3D change, NOT 3A.
+        // T3D.5 — the coexistence flip (Plan §6.1 / §8). The ContextAssembler
+        // §1-§5 block (INCLUDING the §5.5.3 episodic ring) is now the SOLE
+        // transcript + memory context source. The Phase 2 prior-memory block
+        // and the live-transcript AppendTranscript are REMOVED from the
+        // builders (the §5.5.2 ReflectionSummary + §5.5.3 ring supersede the
+        // Phase 2 "你与 X 的过往" recap). The assembler block is still
+        // PREPENDED ahead of the Phase 2 identity block; only PrependAssembler
+        // + the Chinese anti-repeat tail remain alongside it.
         //
         // The Agent/mgr/now params feed the assembler; the CharacterBio
-        // self/other params are RETAINED unchanged so the Phase 2 identity
-        // block + priorMemory path is byte-for-byte the same as before.
+        // self/other params still drive the Phase 2 identity block.
         // `talker`/`talkee` may be null (tests / missing-agent paths) — the
-        // assembler returns "" in that case and only the Phase 2 block emits.
+        // assembler returns "" in that case and only the identity block emits.
         static void PrependAssembler(StringBuilder sp, Agent talker, Agent talkee,
             AITavernManager mgr, long now, ContextProfile profile)
         {
@@ -58,10 +59,11 @@ namespace Jyx2.AITavern
 
         public static Built BuildStart(CharacterBio self, CharacterBio other,
             Agent talker = null, Agent talkee = null, AITavernManager mgr = null, long now = 0L,
-            string seedHook = null, string priorMemory = null)
+            string seedHook = null)
         {
             var sp = BuildIdentityBlock(self, other);
-            AppendPriorMemoryBlock(sp, other, priorMemory);
+            // T3D.5: Phase 2 AppendPriorMemoryBlock removed — the assembler's
+            // §5.5.2 ReflectionSummary + §5.5.3 ring now carry prior memory.
             if (!string.IsNullOrEmpty(seedHook))
                 sp.Append("Possible topics: ").Append(seedHook).Append('\n');
             sp.Append("This is the beginning of your conversation. Stay in character. "
@@ -71,7 +73,8 @@ namespace Jyx2.AITavern
                 // generation instruction so it survives recency bias when the
                 // priorMemory block carries N>2 transcripts.
                 + "不要复述上面已有的对话内容；如无新话题可谈，简短礼貌告辞即可。");
-            // Phase 3A: prepend the §1-§4 static block (Full profile).
+            // T3D.5: prepend the §1-§5 assembler block (Full profile). It is
+            // now the sole context source (no Phase 2 priorMemory alongside).
             PrependAssembler(sp, talker, talkee, mgr, now, ContextProfile.Full);
             return new Built
             {
@@ -81,25 +84,29 @@ namespace Jyx2.AITavern
         }
 
         public static Built BuildContinue(CharacterBio self, CharacterBio other, Conversation conv,
-            Agent talker = null, Agent talkee = null, AITavernManager mgr = null, long now = 0L,
-            string priorMemory = null)
+            Agent talker = null, Agent talkee = null, AITavernManager mgr = null, long now = 0L)
         {
             var sp = BuildIdentityBlock(self, other);
-            AppendPriorMemoryBlock(sp, other, priorMemory);
-            sp.Append("\nConversation so far:\n");
-            // Phase 3A: AppendTranscript STAYS — §6.1's "the assembler is the
-            // sole transcript owner / delete AppendTranscript" is a 3D change
-            // (gated on the §5.5.3 ring existing). In 3A the live transcript
-            // is still rendered here; the assembler emits §1-§4 ONLY (no §5
-            // ring), so there is NO double-render in 3A.
-            AppendTranscript(sp, conv);
+            // T3D.5 — the coexistence flip (Plan §6.1 / §8): the Phase 2
+            // AppendPriorMemoryBlock AND the live-transcript AppendTranscript
+            // ("\nConversation so far:\n" + AppendTranscript(conv)) are BOTH
+            // DELETED here. The live exchange reaches the model via the
+            // assembler's §5.5.3 ring (PerTargetBlock) — NOT a second
+            // transcript path → no double-render; and because ring-append is
+            // co-located with Conversation.AddMessage (T3D.2, EpisodicRing
+            // .Record fired in the same synchronous step right after
+            // conv.AddMessage), the just-added in-flight turn is ALREADY in
+            // the ring when BuildContinue runs → no under-render. `conv` is
+            // still threaded for signature stability / future use.
             sp.Append("\nIt is now your turn. Reply in 1-3 sentences, under 200 Chinese characters. "
                 + "DO NOT greet again. DO NOT repeat what you just said. Stay in character.\n"
                 // Phase 2 (Plan §4.1): anti-repeat guard for prior-history
                 // content (the existing English line above only covers the
                 // immediately-preceding message, not the broader transcript).
                 + "不要复述上面已有的对话内容；如无新话题可谈，简短礼貌告辞即可。");
-            // Phase 3A: prepend the §1-§4 static block (Full profile).
+            // T3D.5: prepend the §1-§5 assembler block (Full profile),
+            // INCLUDING the §5.5.3 ring — now the sole transcript source
+            // (the deleted AppendTranscript above is fully superseded).
             PrependAssembler(sp, talker, talkee, mgr, now, ContextProfile.Full);
             return new Built
             {
@@ -112,37 +119,25 @@ namespace Jyx2.AITavern
             Agent talker = null, Agent talkee = null, AITavernManager mgr = null, long now = 0L)
         {
             var sp = BuildIdentityBlock(self, other);
-            sp.Append("\nConversation so far:\n");
-            // Phase 3A: AppendTranscript STAYS (same as BuildContinue — 3D
-            // change, not 3A). The Leave assembler profile emits §2 ONLY in
-            // 3A (no §5.4/§5.5.3 yet), so no double-render.
-            AppendTranscript(sp, conv);
+            // T3D.5 — the coexistence flip (Plan §6.1 / §8): the
+            // "\nConversation so far:\n" + AppendTranscript(conv) live
+            // transcript is DELETED here too. The lean Leave assembler
+            // profile emits §2 + §5.4 + the §5.5.3 ring-only block
+            // (RingOnlyBlock) — the ring is the sole transcript source for
+            // the farewell (co-located ring-append per T3D.2 means the last
+            // turn is present → no under-render). `conv` is still threaded.
             sp.Append("\nThis conversation has run long. "
                 + "Give a short, in-character farewell (1 sentence, under 50 characters), then stop.");
-            // Phase 3A: prepend the lean Leave static block (Plan §6.1) —
-            // §2 only in 3A (§1/§3/§4 explicitly excluded; §5.4/§5.5.3 are
-            // 3B-3D). Keeps a <50-char goodbye from routing ~15k chars.
+            // T3D.5: prepend the lean Leave block (Plan §6.1) — §2 + §5.4 +
+            // §5.5.3 ring only (§1/§3/§4/§5.0/§5.5.1/§5.5.2 excluded). Keeps
+            // a <50-char goodbye from routing ~15k chars while still knowing
+            // what was just said (the ring).
             PrependAssembler(sp, talker, talkee, mgr, now, ContextProfile.Leave);
             return new Built
             {
                 SystemPrompt = sp.ToString(),
                 Messages = new List<(string, string)>(),
             };
-        }
-
-        // Phase 2 (Plan §4): pass-through stitcher. The block is now fully
-        // pre-rendered by AgentGenerateMessageOp.BuildPriorMemoryBlock with
-        // its own Chinese "你与 <other> 的过往：" framing, summary section,
-        // and [刚刚结束的对话] marker. The per-type anti-repeat / wrap-up
-        // tail is appended elsewhere (T7 attaches it to BuildStart /
-        // BuildContinue). All this helper does now is splice in the
-        // already-rendered text and ensure it ends with a newline so the
-        // following prompt section starts on a fresh line.
-        static void AppendPriorMemoryBlock(StringBuilder sp, CharacterBio other, string priorMemory)
-        {
-            if (string.IsNullOrWhiteSpace(priorMemory)) return;
-            sp.Append(priorMemory);
-            if (!priorMemory.EndsWith("\n")) sp.Append('\n');
         }
 
         // ---- Shared identity / relationship block ----
@@ -166,14 +161,11 @@ namespace Jyx2.AITavern
             return sp;
         }
 
-        static void AppendTranscript(StringBuilder sp, Conversation conv)
-        {
-            if (conv == null || conv.Transcript == null) return;
-            foreach (var msg in conv.Transcript)
-            {
-                var author = msg.Author.Value ?? "?";
-                sp.Append(author).Append(": ").Append(msg.Text).Append('\n');
-            }
-        }
+        // T3D.6 (Plan §5.4 / §6.1 / §8): the DEAD Phase 2 `AppendPriorMemory-
+        // Block` and `AppendTranscript` helpers were DELETED here. Both had
+        // zero callers after T3D.5 (BuildStart/BuildContinue/BuildLeave stopped
+        // calling them — the §5.5.3 ring is now the SOLE transcript source and
+        // §5.5.2 ReflectionSummary carries prior memory). Their Phase 2 tests
+        // were rewritten to 3D reality in the same task.
     }
 }

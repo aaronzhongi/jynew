@@ -335,10 +335,19 @@ namespace Jyx2.AITavern.Tests
                 "null talker → empty/whitespace so PrependAssembler skips and the prompt is Phase-2-only");
         }
 
-        // ---------- Test 9: 3A coexistence at the ConversationPrompts seam ----------
+        // ---------- Test 9: 3D final state — assembler is the SOLE context;
+        //                    live turn via the §5.5.3 ring (NOT conv.Transcript) ----------
 
+        // REWRITTEN from the old 3A-coexistence test (T3D.6, Plan §5.4/§8).
+        // T3D.5 removed the Phase 2 prior-memory path + AppendTranscript: the
+        // assembler §1-§5 block is now the SOLE context (no PRIOR_MEM_SENTINEL
+        // priorMemory path, no "Conversation so far:" raw conv.Transcript
+        // render). The live transcript reaches the prompt via the §5.5.3 ring,
+        // seeded through the REAL path EpisodicRing.Record — NOT
+        // conv.Transcript.Add. This file's domain focus is section ORDER
+        // (§1 → §2 → … → §5), asserted on the public BuildContinue output.
         [Test]
-        public void Coexistence_AssemblerPrependedPhase2Intact()
+        public void Coexistence_AssemblerIsSoleContext_LiveTurnViaRing()
         {
             _mgr.World = MakeWorld();
 
@@ -357,48 +366,52 @@ namespace Jyx2.AITavern.Tests
 
             var talker = TestBuilders.MakeAgent("huangrong", bio: selfBio);
             var talkee = TestBuilders.MakeAgent("ouyangke", bio: otherBio);
+            _mgr.NPCs.Register(talker);
+            _mgr.NPCs.Register(talkee);
 
-            const string priorMem = "PRIOR_MEM_SENTINEL";
-
-            // --- BuildStart ---
-            var start = ConversationPrompts.BuildStart(
-                selfBio, otherBio, talker, talkee, _mgr, now: 1_000_000, priorMemory: priorMem);
-            string sp = start.SystemPrompt;
-
-            StringAssert.Contains(H_SELF, sp, "assembler §2 header present in Start prompt");
-            StringAssert.Contains(priorMem, sp,
-                "Phase 2 prior-memory path STILL intact (3A coexistence, Plan §8)");
-            int asmIdxS = Idx(sp, H_SELF);
-            int memIdxS = Idx(sp, priorMem);
-            Assert.Greater(asmIdxS, -1);
-            Assert.Greater(memIdxS, -1);
-            Assert.Less(asmIdxS, memIdxS,
-                "assembler static block is PREPENDED before the Phase 2 content");
-
-            // --- BuildContinue (with a live transcript) ---
+            // The live turn reaches the prompt ONLY via the §5.5.3 ring, seeded
+            // through the SAME co-located call the turn-writers use.
             var conv = new Conversation();
+            conv.Participants[talker.PlayerId] = new ConversationMember { Status = MemberStatusKind.Participating };
+            conv.Participants[talkee.PlayerId] = new ConversationMember { Status = MemberStatusKind.Participating };
             const string liveTurn = "蓉儿妹妹，别来无恙LIVE_TURN_SENTINEL";
-            conv.Transcript.Add(new Message
-            {
-                Author = new GameId("ouyangke"),
-                Text = liveTurn,
-                Timestamp = 1_000_500,
-            });
+            EpisodicRing.Record(_mgr, conv, talkee.PlayerId, liveTurn, 1_000_500);
 
             var cont = ConversationPrompts.BuildContinue(
-                selfBio, otherBio, conv, talker, talkee, _mgr, now: 1_001_000, priorMemory: priorMem);
+                selfBio, otherBio, conv, talker, talkee, _mgr, now: 1_001_000);
             string cp = cont.SystemPrompt;
 
-            StringAssert.Contains(H_SELF, cp, "assembler §2 header present in Continue prompt");
-            StringAssert.Contains(priorMem, cp,
-                "Phase 2 prior-memory path STILL intact in Continue (Plan §8)");
+            // The assembler block IS the context: §1-§5 headers present, in
+            // FIXED order (this file's domain focus).
+            int w  = Idx(cp, H_WORLD);
+            int se = Idx(cp, H_SELF);
+            int tk = Idx(cp, H_TALKEE);
+            int lt = Idx(cp, H_LONGTERM);
+            Assert.Greater(w, -1, "§1 present");
+            Assert.Greater(se, -1, "§2 present");
+            Assert.Greater(tk, -1, "§3 present");
+            Assert.Greater(lt, -1, "§4 present");
+            Assert.Less(w, se, "§1 before §2");
+            Assert.Less(se, tk, "§2 before §3");
+            Assert.Less(tk, lt, "§3 before §4 (Plan §1 fixed order, in Continue)");
+
+            // Live turn present via the §5.5.3 ring (no under-render), exactly
+            // once (no double-render — AppendTranscript deleted, T3D.5).
             StringAssert.Contains(liveTurn, cp,
-                "Phase 2 AppendTranscript STILL renders the live transcript in 3A (Plan §8 — "
-                + "the §6.1 AppendTranscript deletion is a 3D change, NOT 3A)");
-            int asmIdxC = Idx(cp, H_SELF);
-            int memIdxC = Idx(cp, priorMem);
-            Assert.Less(asmIdxC, memIdxC,
-                "assembler block precedes the Phase 2 identity / prior-memory content in Continue");
+                "live turn reaches Continue via the §5.5.3 ring (NOT conv.Transcript)");
+            int occ = 0, idx = 0;
+            while ((idx = cp.IndexOf(liveTurn, idx, StringComparison.Ordinal)) >= 0) { occ++; idx += liveTurn.Length; }
+            Assert.AreEqual(1, occ, "live turn appears EXACTLY ONCE (ring is sole transcript source)");
+            StringAssert.Contains("最近交谈（最近", cp, "§5.5.3 ring block present");
+            StringAssert.Contains("［刚刚结束的对话］", cp, "newest ring turn tagged ［刚刚结束的对话］");
+
+            // The removed Phase 2 paths leave NO trace; PrependAssembler + the
+            // Chinese anti-repeat tail remain (Plan §6 / T3D.5).
+            Assert.IsFalse(cp.Contains("PRIOR_MEM_SENTINEL"), "no Phase 2 priorMemory path");
+            Assert.IsFalse(cp.Contains("Conversation so far:"), "no Phase 2 live-transcript header");
+            Assert.IsFalse(cp.Contains("你与 欧阳克 的过往："), "no Phase 2 prior-memory header");
+            StringAssert.Contains("不要复述上面已有的对话内容", cp,
+                "the Phase 2 Chinese anti-repeat tail is KEPT alongside the assembler block");
         }
 
         // ---------- Test 10: PersonView match by AgentId, fallback by BioName ----------

@@ -450,10 +450,17 @@ namespace Jyx2.AITavern.Tests
             Assert.Less(lt, st, "§4 long-term precedes §5 short-term (Plan §1 fixed order)");
         }
 
-        // ---------- Test 11: 3C coexistence at the ConversationPrompts seam ----------
+        // ---------- Test 11: 3D final state — §5.4 emotion + §5.5.1 affection
+        //                    render ALONGSIDE the §5.5.3 ring ----------
 
+        // REWRITTEN from the old 3C-coexistence test (T3D.6, Plan §5.4/§8).
+        // T3D.5 removed the Phase 2 prior-memory path (superseded by §5.5.2/
+        // §5.5.3). The assembler block is now the SOLE context. This file's
+        // domain focus: §5.4 此刻心绪 + §5.5.1 当下好恶 STILL render alongside
+        // the live-turn §5.5.3 ring, the live turn seeded through the REAL
+        // path EpisodicRing.Record (NOT conv.Transcript).
         [Test]
-        public void Coexistence_Affect_Phase2Intact()
+        public void Coexistence_Affect_RendersAlongsideRing()
         {
             var selfBio = NewBio("huangrong", "黄蓉");
             selfBio.Personality = "灵动机敏";
@@ -463,6 +470,8 @@ namespace Jyx2.AITavern.Tests
 
             var talker = TestBuilders.MakeAgent("huangrong", bio: selfBio);
             var talkee = TestBuilders.MakeAgent("ouyangke", bio: otherBio);
+            _mgr.NPCs.Register(talker);
+            _mgr.NPCs.Register(talkee);
 
             var mind = _mgr.GetOrCreateMind(talker.PlayerId);
             mind.Situation = "避追兵于客栈";
@@ -480,23 +489,42 @@ namespace Jyx2.AITavern.Tests
                 },
             };
 
-            const string priorMem = "PRIOR_MEM_SENTINEL";
+            var conv = new Conversation();
+            conv.Participants[talker.PlayerId] = new ConversationMember { Status = MemberStatusKind.Participating };
+            conv.Participants[talkee.PlayerId] = new ConversationMember { Status = MemberStatusKind.Participating };
+            const string liveTurn = "你为何在此LIVE_TURN_SENTINEL";
+            EpisodicRing.Record(_mgr, conv, talkee.PlayerId, liveTurn, 1_000_500);
 
-            var start = ConversationPrompts.BuildStart(
-                selfBio, otherBio, talker, talkee, _mgr, now: 1_000_000, priorMemory: priorMem);
-            string sp = start.SystemPrompt;
+            // now ≈ LastSetMs so §5.4 emotion has NOT decayed below
+            // EMOTION_FLOOR (dt≪half-life) — the emotion line must still render.
+            var cont = ConversationPrompts.BuildContinue(
+                selfBio, otherBio, conv, talker, talkee, _mgr, now: 1_000L);
+            string sp = cont.SystemPrompt;
 
-            StringAssert.Contains(L_EMOTION, sp, "assembler §5.4 emotion present in the Start prompt");
-            StringAssert.Contains(L_AFFECTION, sp, "assembler §5.5.1 affection present in the Start prompt");
-            StringAssert.Contains(priorMem, sp,
-                "Phase 2 prior-memory path STILL intact (3C coexistence, Plan §8)");
+            // §5.4 emotion + §5.5.1 affection STILL render (domain focus) ...
+            StringAssert.Contains(L_EMOTION, sp, "§5.4 此刻心绪 still renders");
+            StringAssert.Contains(L_AFFECTION, sp, "§5.5.1 当下好恶 still renders");
+            // ... ALONGSIDE the §5.5.3 ring carrying the live turn (no
+            // under-render), exactly once (no double-render — T3D.5).
+            StringAssert.Contains(liveTurn, sp, "live turn via the §5.5.3 ring (no under-render)");
+            int occ = 0, idx = 0;
+            while ((idx = sp.IndexOf(liveTurn, idx, StringComparison.Ordinal)) >= 0) { occ++; idx += liveTurn.Length; }
+            Assert.AreEqual(1, occ, "live turn appears EXACTLY ONCE (ring is sole transcript source)");
+            StringAssert.Contains("［刚刚结束的对话］", sp, "ring tags the newest turn");
 
-            int asmIdx = Idx(sp, H_SELF);   // assembler block start (§2 always present)
-            int memIdx = Idx(sp, priorMem);
-            Assert.Greater(asmIdx, -1, "assembler block present");
-            Assert.Greater(memIdx, -1, "Phase 2 prior-memory block present");
-            Assert.Less(asmIdx, memIdx,
-                "assembler static block (incl. §5.4/§5.5.1) is PREPENDED before the Phase 2 content");
+            // §5.5.1 affection and §5.5.3 ring fold under ONE ·对 欧阳克· header.
+            int affIdx = Idx(sp, L_AFFECTION);
+            int ringIdx = Idx(sp, "最近交谈（最近");
+            Assert.Greater(affIdx, -1);
+            Assert.Greater(ringIdx, -1);
+            Assert.Less(affIdx, ringIdx, "§5.5.1 affection precedes the §5.5.3 ring (one ·对 X· block)");
+
+            Assert.IsFalse(sp.Contains("PRIOR_MEM_SENTINEL"), "no Phase 2 priorMemory path");
+            Assert.IsFalse(sp.Contains("Conversation so far:"), "no Phase 2 live-transcript header");
+            int asmIdx = Idx(sp, H_SELF);
+            Assert.Greater(asmIdx, -1, "assembler block present (PrependAssembler intact)");
+            StringAssert.Contains("不要复述上面已有的对话内容", sp,
+                "the Phase 2 Chinese anti-repeat tail is KEPT");
         }
 
         // ---------- Test 12: whole §5 omitted when §5.1-5.4 ALL empty ----------

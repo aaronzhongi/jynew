@@ -16,7 +16,7 @@ namespace Jyx2.AITavern
 
         public Affect Emotion;                                  // §5.4 decaying mood (set by 3D appraisal; until then unset → §5.4 omitted)
         public Dictionary<GameId, TargetState> Targets = new Dictionary<GameId, TargetState>();  // §5.5 per-talkee (3C: Affection only)
-        // 3D: public string GlobalReflection;                  // §5.0 cross-person fold
+        public string GlobalReflection;          // §5.0 (3D) — per-TALKER cross-person fold of Targets[*].ReflectionSummary; flat, no recursion (§5.3.1)
     }
 
     // §5.3 surroundings — structural model + a cheap template/Grok-summarized
@@ -56,15 +56,27 @@ namespace Jyx2.AITavern
         }
     }
 
+    // Phase 3D (Plan §2.4 / §5.1): one episodic turn in a TargetState.Ring.
+    // The ring is anchor(first turn) + last-9; on overflow the oldest
+    // NON-anchor record spills to the per-pair MemoryStash raw list
+    // (T3D.2). Speaker is the GameId of who said Text at Ms (epoch ms).
+    public class TurnRecord
+    {
+        public GameId Speaker;
+        public string Text;
+        public long   Ms;
+    }
+
     // Phase 3C ships ONLY Affection (§5.5.1). ReflectionSummary / Ring /
     // ImpressionDelta (§5.5.2/3/overlay) are 3D — declared then, at the
     // marked seams, because Ring needs TurnRecord + MEMORY_RING_CAP which
     // do not exist yet.
     public class TargetState
     {
-        public Affect Affection;                 // §5.5.1 decays toward canon baseline
-        // 3D: public string ReflectionSummary;  // §5.5.2 per-pair fold
-        // 3D: public System.Collections.Generic.List<TurnRecord> Ring;  // §5.5.3 last-N turns
-        // 3D: public string ImpressionDelta;    // §4 runtime overlay on Dossier.PersonView
+        public Affect Affection;                 // §5.5.1 (3C) — decays toward canon baseline
+        public string ReflectionSummary;         // §5.5.2 (3D) — per-pair durable fold; backed by Phase 2 CompactedSummary.SummaryText
+        public List<TurnRecord> Ring
+            = new List<TurnRecord>();             // §5.5.3 (3D) — anchor + last-9, cap MEMORY_RING_CAP
+        public string ImpressionDelta;           // §4 overlay (3D) — runtime delta appended over the immutable Dossier.PersonView.Impression; NEVER mutates the asset
     }
 }

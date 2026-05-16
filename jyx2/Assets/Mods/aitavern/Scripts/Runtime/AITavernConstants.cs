@@ -18,45 +18,6 @@ namespace Jyx2.AITavern
         // Time (ms)
         public const long TYPING_TIMEOUT_MS = 15_000;
 
-        // Phase 2 — context-based memory.
-        //
-        // MEMORY_CONTEXT_BUDGET_CHARS: max char-length of the priorMemory block
-        // in the system prompt before compaction is requested.
-        //
-        // Budget math (re-verify if numbers change):
-        //   - 20 000 chars * ~0.7 tokens/char (mixed CJK/ASCII) ≈ 14 000 tokens
-        //     memory block
-        //   - + persona ~500 tokens
-        //   - + transcript-so-far ~3 000 tokens (8-msg conv at 200 tok/msg)
-        //   - + reply allowance ~250 tokens
-        //   - = ~18 000 tokens total prompt, well under grok-4 256K context
-        //
-        // The block can transiently grow up to MEMORY_CONTEXT_BUDGET_CHARS * 1.5
-        // before the read-side soft-truncate (Plan §4 step 4) kicks in to deterministically
-        // drop the oldest un-folded transcripts. Above ~50 % of context depth,
-        // long-context recall degrades — keep the budget well below.
-        public const int MEMORY_CONTEXT_BUDGET_CHARS = 20_000;
-
-        // Read-side soft-truncate threshold (multiplier on the budget). When
-        // compaction has failed repeatedly and the block exceeds this, the read
-        // path deterministically drops the oldest un-folded transcripts to avoid
-        // blowing the 256K hard cap mid-conversation.
-        public const float MEMORY_CONTEXT_HARD_OVERFLOW_FACTOR = 1.5f;
-
-        // Compaction target: after compaction, the projected block (including the
-        // new summary at upper-bound ~MEMORY_SUMMARY_MAX_CHARS) must fit under
-        // MEMORY_CONTEXT_BUDGET_CHARS * this fraction. Leaves headroom so a single
-        // new conversation doesn't immediately re-trigger compaction.
-        public const float MEMORY_COMPACTION_TARGET_FRACTION = 0.6f;
-
-        // Summary call output bounds. The summarizer must capture 4 facets
-        // (relationship / shared experiences / unresolved tensions / concrete facts)
-        // — too-tight budgets collapse them into mush. ~400 chars / 500 tokens
-        // gives the model headroom while still keeping summaries concise.
-        public const int MEMORY_SUMMARY_MAX_CHARS = 400;
-        public const int MEMORY_SUMMARY_MAX_TOKENS = 500;
-        public const float MEMORY_SUMMARY_TEMPERATURE = 0.3f;  // factual compression, not creative
-
         // Phase 3A — ContextAssembler §1-§4 static-section char budgets
         // (Plan §7). Each layered section is independently truncated so one
         // verbose dossier can't crowd out the rest of the prompt.
@@ -78,5 +39,23 @@ namespace Jyx2.AITavern
         public const float EMOTION_HALFLIFE_MS   = 90_000f;   // ~1.5 min
         public const float EMOTION_FLOOR         = 0.12f;     // below → omit §5.4
         public const float AFFECTION_HALFLIFE_MS = 900_000f;  // ~15 min, reverts to canon baseline
+
+        // Phase 3D — reflection-consolidation (Plan §7).
+        //   MEMORY_RING_CAP: TargetState.Ring slots = 1 pinned anchor (first
+        //     turn of the conversation) + the most recent (CAP-1). 11th turn
+        //     evicts the oldest NON-anchor into the per-pair spill (§5.1/§5.2).
+        //   AFFECT_DELTA_DEADBAND: salience gate (§5.3) — if |好恶变化| is
+        //     below this AND 情绪变化 is neutral, the consolidation still
+        //     folds the summary but does NOT apply the affect deltas / reset
+        //     LastSetMs, so chit-chat can't starve the baseline-reversion
+        //     decay (§4.4). Zero extra Grok cost (reads already-returned slots).
+        public const int   MEMORY_RING_CAP        = 10;
+        public const float AFFECT_DELTA_DEADBAND  = 0.08f;
+
+        // Phase 3D — reflection-consolidation Grok call bounds (Plan §7
+        // "Reflection call"): the §5.3 4-slot consolidation (往来印象/情绪变化/
+        // 好恶变化/违背设定) factual compression, not creative generation.
+        public const int   REFLECT_MAX_TOKENS  = 500;   // §7
+        public const float REFLECT_TEMPERATURE = 0.3f;  // §7 — factual consolidation, not creative
     }
 }
