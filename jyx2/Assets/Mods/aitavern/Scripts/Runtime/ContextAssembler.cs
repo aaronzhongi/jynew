@@ -72,8 +72,13 @@ namespace Jyx2.AITavern
                 // §4 Long-term knowledge — the TALKER's Dossier view.
                 AppendSection(sb, BuildLongTerm(talker, talkee, mgr), AITavernConstants.SECT_LONGTERM_BUDGET);
 
-                // 3B: §5.1 situation / §5.2 task / §5.3 surroundings slot here.
-                // 3C: §5.4 emotion (decaying, omit below EMOTION_FLOOR) slots here.
+                // §5 short-term — situation / task / surroundings (3B). Read-only
+                // lookup of the talker's RuntimeMindState; whole block omitted if
+                // no mind or all three sub-fields empty (Plan §6 empty-omission).
+                AppendSection(sb, BuildShortTerm(talker, mgr), AITavernConstants.SECT_SHORTTERM_BUDGET);
+
+                // 3C: §5.4 emotion appends AFTER the §5.1-5.3 short-term block
+                //     here (decaying, omit below EMOTION_FLOOR).
                 // 3D: §5.0 global reflection + §5.5 per-target (affection /
                 //     reflection summary / episodic ring) slot here. The ring
                 //     becomes the SOLE transcript source — that is when
@@ -86,7 +91,10 @@ namespace Jyx2.AITavern
                 // §5.4/§5.5.3 are 3B-3D, so 3A Leave == §2 ONLY. Explicitly
                 // NO §1 World Codex, NO §3, NO §4 long-term knowledge —
                 // routing ~15k chars of context into a <50-char goodbye is
-                // the exact cost regression Plan §6.1 forbids.
+                // the exact cost regression Plan §6.1 forbids. NOTE (3B): the
+                // §5.1-5.3 short-term block (situation/task/surroundings) is
+                // Full-profile ONLY — it is deliberately NOT added here; the
+                // lean farewell carries only §2 (+ later §5.4/§5.5.3).
                 AppendSection(sb, BuildSelfBio(talkerBio), AITavernConstants.SECT_SELFBIO_BUDGET);
 
                 // 3C: §5.4 emotion slots here (Leave profile).
@@ -441,6 +449,70 @@ namespace Jyx2.AITavern
                 }
             }
             return null;
+        }
+
+        // ---- §5.1-5.3 short-term (volatile, SECT_SHORTTERM_BUDGET) ----
+
+        // The talker's runtime working memory: 处境 (§5.1 Situation) / 目标
+        // (§5.2 Task) / 环境 (§5.3 Surroundings). READ-ONLY: the assembler is
+        // a pure synchronous renderer (Plan §6) — it looks the mind up with
+        // TryGetValue and NEVER calls GetOrCreateMind or writes any field, so
+        // rendering a prompt cannot mutate process state. Mirrors the
+        // empty-omission contract of BuildSelfBio/BuildLongTerm: every
+        // sub-line is emitted only if its source is non-empty, and if ALL
+        // THREE are empty the whole §5 block (header included) is omitted.
+        // 3B-only: no decay/reflection, no Grok (Plan §8).
+        static string BuildShortTerm(Agent talker, AITavernManager mgr)
+        {
+            if (talker == null || mgr == null || mgr.Minds == null) return null;
+
+            // Key on talker.PlayerId — the SAME GameId T3B.2 seeds with
+            // (GetOrCreateMind(agent.PlayerId)). No create here: an absent
+            // key (player has no mind, or pre-3B-seed) → §5 omitted.
+            RuntimeMindState mind;
+            if (!mgr.Minds.TryGetValue(talker.PlayerId, out mind) || mind == null)
+                return null;
+
+            bool hasSituation = !string.IsNullOrWhiteSpace(mind.Situation);
+            bool hasTask = !string.IsNullOrWhiteSpace(mind.Task);
+
+            // 环境: prefer T3B.2's template-rendered Summary; else fall back
+            // to PlaceText (+ in-scene talkables when KnownPresent non-empty).
+            string surroundings = null;
+            var sur = mind.Surroundings;
+            if (sur != null)
+            {
+                if (!string.IsNullOrWhiteSpace(sur.Summary))
+                {
+                    surroundings = sur.Summary.Trim();
+                }
+                else if (!string.IsNullOrWhiteSpace(sur.PlaceText))
+                {
+                    surroundings = sur.PlaceText.Trim();
+                    if (sur.KnownPresent != null && sur.KnownPresent.Count > 0)
+                    {
+                        var present = new List<string>();
+                        foreach (var k in sur.KnownPresent)
+                        {
+                            if (!string.IsNullOrWhiteSpace(k)) present.Add(k.Trim());
+                        }
+                        if (present.Count > 0)
+                            surroundings += "；在场可交谈者：" + string.Join("、", present);
+                    }
+                }
+            }
+            bool hasSurroundings = !string.IsNullOrWhiteSpace(surroundings);
+
+            // All three empty → omit the whole §5 block (no bare header) —
+            // same `any`/null-return contract as BuildLongTerm.
+            if (!hasSituation && !hasTask && !hasSurroundings) return null;
+
+            var sb = new StringBuilder();
+            sb.Append("【眼前局势 — 短期记忆】");
+            if (hasSituation) sb.Append("\n处境：").Append(mind.Situation.Trim());
+            if (hasTask)      sb.Append("\n目标：").Append(mind.Task.Trim());
+            if (hasSurroundings) sb.Append("\n环境：").Append(surroundings);
+            return sb.ToString();
         }
     }
 }

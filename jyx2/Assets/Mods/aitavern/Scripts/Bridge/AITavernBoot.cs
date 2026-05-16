@@ -134,6 +134,13 @@ namespace Jyx2.AITavern.Bridge
             // Register the player agent (no spawn — uses existing Level/Player).
             RegisterPlayerAgent(mgr);
 
+            // Phase 3B (Plan §4.2 / §10 Q5): now that ALL NPCs are spawned and
+            // the player is registered, fill every NPC mind's Surroundings
+            // (KnownPresent + template Summary) from the FINAL registry in one
+            // pass. Done here (not inline per-spawn) so the last-spawned NPC
+            // still sees everyone — avoids a spawn-order visibility bug.
+            SeedSurroundings(mgr);
+
             // Wire UI bridges.
             AgentGenerateMessageOp.OnMessageGenerated += OnNpcMessageGenerated;
             AITavernInteractable.OnPlayerInteract += OnPlayerInteractWithNpc;
@@ -313,6 +320,26 @@ namespace Jyx2.AITavern.Bridge
                 Bio = bio,
             };
             mgr.NPCs.Register(agent);
+
+            // Phase 3B (Plan §4.1): seed this NPC's runtime mind with its
+            // static Situation/Task. Keyed by agent.PlayerId — the SAME id the
+            // FSM (Conversation / AgentDecision) keys on. No LLM call:
+            // designer-authored Default* first, else reuse the Phase 1/2 Plans
+            // prose (§4.1 "one-line default generated from Plans"). Surroundings
+            // KnownPresent/Summary are filled by the post-spawn SeedSurroundings
+            // pass once every actor exists.
+            var mind = mgr.GetOrCreateMind(agent.PlayerId);
+            string plans = bio.Plans ?? "";
+            mind.Situation = !string.IsNullOrEmpty(bio.DefaultSituation)
+                ? bio.DefaultSituation
+                : (!string.IsNullOrEmpty(plans) ? plans : "");
+            mind.Task = !string.IsNullOrEmpty(bio.DefaultTask)
+                ? bio.DefaultTask
+                : (!string.IsNullOrEmpty(plans) ? plans : "");
+            // Structural place is set once (frozen-NPC reality, §4.2). Use a
+            // sensible scene default; KnownPresent/Summary computed post-spawn.
+            mind.Surroundings.PlaceText = "客栈之中";
+            mind.Surroundings.LastUpdatedMs = mgr.Clock?.NowMs() ?? 0L;
         }
 
         void RegisterPlayerAgent(AITavernManager mgr)
@@ -348,6 +375,50 @@ namespace Jyx2.AITavern.Bridge
             bio.Identity = "一名来历不明的江湖过客，刚踏入这家客栈。身份、来路、目的皆未明。";
             bio.HeadId = 0;
             return bio;
+        }
+
+        // Phase 3B (Plan §4.2 / §10 Q5): single post-spawn pass that fills
+        // every NPC mind's structural Surroundings from the FINAL registry.
+        // Runs once, AFTER all NPCs + the player are registered, so KnownPresent
+        // sees every talkable actor regardless of spawn order. Frozen-NPC
+        // reality: computed once here and never updated in 3B. Summary is a
+        // TEMPLATE render — ZERO Grok. The player is a talkable actor so it IS
+        // listed in NPC KnownPresent, but the human gets NO mind of its own.
+        void SeedSurroundings(AITavernManager mgr)
+        {
+            var all = mgr.NPCs.All.ToList();
+            foreach (var self in all)
+            {
+                if (self == null || self.IsHuman) continue; // player has no mind
+
+                var mind = mgr.GetOrCreateMind(self.PlayerId);
+
+                var present = new List<string>();
+                foreach (var other in all)
+                {
+                    if (other == null || other.PlayerId.Equals(self.PlayerId)) continue;
+                    // Display name: Bio.BioName when authored, else AgentId.
+                    string name = other.Bio != null && !string.IsNullOrEmpty(other.Bio.BioName)
+                        ? other.Bio.BioName
+                        : (other.Bio != null && !string.IsNullOrEmpty(other.Bio.AgentId)
+                            ? other.Bio.AgentId
+                            : other.AgentId.Value);
+                    if (other.IsHuman && string.IsNullOrEmpty(name)) name = "一名江湖客";
+                    if (!string.IsNullOrEmpty(name)) present.Add(name);
+                }
+
+                mind.Surroundings.KnownPresent = present;
+                if (string.IsNullOrEmpty(mind.Surroundings.PlaceText))
+                    mind.Surroundings.PlaceText = "客栈之中";
+                mind.Surroundings.LastUpdatedMs = mgr.Clock?.NowMs() ?? 0L;
+                // Template render only — NO Grok (frozen-NPC, §4.2).
+                // 3B+ hook: when the structural set changes AND ≥2 dynamic
+                // facts accrue (§10 Q5), a Grok-summarize call would replace
+                // this template render. Never fires while NPCs are frozen.
+                mind.Surroundings.Summary = present.Count > 0
+                    ? $"{mind.Surroundings.PlaceText}；在场可交谈者：{string.Join("、", present)}"
+                    : mind.Surroundings.PlaceText;
+            }
         }
 
         // ---------------- Event handlers ----------------

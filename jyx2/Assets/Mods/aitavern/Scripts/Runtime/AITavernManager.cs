@@ -37,6 +37,12 @@ namespace Jyx2.AITavern
         public WorldCodex World;
         public Dictionary<string, CharacterDossier> Dossiers = new Dictionary<string, CharacterDossier>();
 
+        // Phase 3B (Plan §2.4) — per-live-agent volatile short-term memory
+        // (Situation/Task/Surroundings). Keyed by the agent's GameId (the
+        // PlayerId the FSM keys on, same as Conversations/AgentDecision).
+        // In-process only; never serialized — same boundary as Memory/Dossiers.
+        public Dictionary<GameId, RuntimeMindState> Minds = new Dictionary<GameId, RuntimeMindState>();
+
         // Injectable interfaces — production uses SystemClock + GrokClient;
         // tests inject FakeClock + MockGrokClient.
         public IClock Clock;
@@ -102,10 +108,30 @@ namespace Jyx2.AITavern
             // before the lore pipeline has produced assets. `World` stays
             // null until AITavernBoot loads it (null → §1 simply omitted).
             if (Dossiers == null) Dossiers = new Dictionary<string, CharacterDossier>();
+            // Phase 3B: dict must exist so ContextAssembler's §5 lookup
+            // (mgr.Minds.TryGetValue, T3B.3) doesn't NRE in edit-mode tests
+            // before any NPC is spawned/seeded.
+            if (Minds == null) Minds = new Dictionary<GameId, RuntimeMindState>();
             if (Clock == null) Clock = new SystemClock();
             // Grok left null intentionally — production must explicitly inject GrokClient
             // OR the missing-key path engages the stub-line fallback (Phase 1 §4.4).
             if (PreCombatPositions == null) PreCombatPositions = new Dictionary<GameId, Vector3>();
+        }
+
+        /// <summary>
+        /// Phase 3B (§2.4): idempotent get-or-create of an agent's runtime
+        /// mind. Keyed by the agent's GameId (PlayerId — the FSM key). Never
+        /// duplicates; safe to call repeatedly (re-seeding at spawn is safe).
+        /// </summary>
+        public RuntimeMindState GetOrCreateMind(GameId owner)
+        {
+            if (Minds == null) Minds = new Dictionary<GameId, RuntimeMindState>();
+            if (!Minds.TryGetValue(owner, out var m))
+            {
+                m = new RuntimeMindState { Owner = owner };
+                Minds[owner] = m;
+            }
+            return m;
         }
 
         /// <summary>

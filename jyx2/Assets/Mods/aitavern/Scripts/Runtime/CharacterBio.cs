@@ -59,6 +59,12 @@ namespace Jyx2.AITavern
         [TextArea] public string Appearance;     // §3 外貌 — what a STRANGER sees first
         [TextArea] public string SurfaceManner;  // §3 气度 — first-impression demeanor only
 
+        // --- Phase 3B (§4.1): designer-authored short-term seed (optional) ---
+        // Empty → ContextAssembler falls back to Plans prose for Situation
+        // and a Task line. Static for a given scene run; no LLM call.
+        [TextArea] public string DefaultSituation;   // §5.1 处境
+        [TextArea] public string DefaultTask;        // §5.2 目标
+
         // Helpers -----------------------------------------------------------------------
 
         // INV-3.6-5: ambient curiosity default 0.3 when no explicit interest authored.

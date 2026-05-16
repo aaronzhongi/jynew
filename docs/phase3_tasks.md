@@ -28,6 +28,30 @@ with hand-authored fixture assets first; the real pipeline (T3A.6, user-
 run, token-expensive) generates production assets last. Commit 3A after
 T3A.5 (code complete); T3A.6 output is a follow-up data commit.
 
-## Phase 3B/3C/3D — decomposed when 3A lands
-(Working memory / affect decay / consolidation. Detail TBD post-3A so the
-breakdown reflects what 3A actually shipped.)
+## Phase 3A — STATUS: DONE & VALIDATED
+
+T3A.1-6 shipped, reviewed, committed (def482edf + lore data eb21c6a07 +
+pipeline fixes a739102b8/09acb85b6/e25a3aa2a). In-engine smoke test
+confirmed all 4 layers render, anti-omniscience holds live, Phase 2
+coexistence intact, dialogue novel-grounded (黄蓉 used 折扇 from §3 +
+白驼山 from §4 in-character). Lore data canon-clean after 3-cycle audit.
+
+## Phase 3B — working memory (§5.1 situation / §5.2 task / §5.3 surroundings)
+
+Seam already marked: `ContextAssembler.cs:75` (`// 3B:` ) + plan §2.4,
+§4.1, §4.2, §6.1, §8. NO decay, NO reflection, NO Grok in the assembler
+(stays synchronous). Frozen-NPC reality: surroundings set once at spawn,
+template-rendered, zero Grok calls (plan §10 Q5).
+
+| # | Task | Files | Depends |
+|---|---|---|---|
+| T3B.1 | Schema: `RuntimeMindState` (Situation/Task/Surroundings subset — Emotion/GlobalReflection/Targets deferred to 3C/3D, declared then) + `SurroundingsModel` POCOs; `CharacterBio` +`DefaultSituation`/`DefaultTask` optional fields | new `RuntimeMindState.cs`, `CharacterBio.cs` | — |
+| T3B.2 | `AITavernManager.Minds` (`Dictionary<GameId,RuntimeMindState>`, EnsureInitialized, `GetOrCreateMind`) + `AITavernBoot` wiring: on SpawnNpc create the mind, set Situation/Task (CharacterBio.Default* → fallback to `Plans` prose), set Surroundings structural model (PlaceText + KnownPresent = other talkable agents); frozen ⇒ set-once, template Summary, no Grok | `AITavernManager.cs`, `AITavernBoot.cs` | T3B.1 |
+| T3B.3 | `ContextAssembler` §5 block 【眼前局势 — 短期记忆】 (处境/目标/环境) at the 3B seam; **Full profile only** (Leave excludes §5.1-5.3 per §6.1); empty-omission; `SECT_SHORTTERM_BUDGET` | `ContextAssembler.cs`, `AITavernConstants.cs` | T3B.1, T3B.2 |
+| T3B.4 | Editor tests: schema; assembler §5 order/omission; Situation/Task Plans-fallback; surroundings structural model + template render + zero Grok; Leave excludes §5.1-5.3; coexistence (§1-§4 + Phase 2 path still intact) | new test file | T3B.3 |
+
+Order T3B.1→.2→.3→.4. Commit 3B after .4. Plan-reviewers monitor:
+existing-impl (T3B.2/.3 integration), others on lane-relevant deltas.
+
+## Phase 3C / 3D — decomposed when 3B lands
+(3C affect decay; 3D reflection-consolidation, the centerpiece.)

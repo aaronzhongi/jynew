@@ -59,11 +59,15 @@ namespace Jyx2.AITavern
 
         // Phase 3A — ContextAssembler §1-§4 static-section char budgets
         // (Plan §7). Each layered section is independently truncated so one
-        // verbose dossier can't crowd out the rest of the prompt. The §5
-        // short-term + decay/reflect constants land in 3B-3D, not here.
+        // verbose dossier can't crowd out the rest of the prompt.
         public const int SECT_WORLD_BUDGET    = 1500;  // §1 World Codex
         public const int SECT_SELFBIO_BUDGET  = 600;   // §2 talker bio
         public const int SECT_TALKEE_BUDGET   = 400;   // §3 talkee first-impression surface
         public const int SECT_LONGTERM_BUDGET = 3000;  // §4 long-term knowledge (polity/faction/person)
+
+        // Phase 3B — §5 short-term block budget (Plan §7). Covers
+        // situation + task + surroundings (3B); 3C appends §5.4 emotion
+        // and 3D §5.0/§5.5 within their own logic, not a separate budget.
+        public const int SECT_SHORTTERM_BUDGET = 4000; // §5 working memory
     }
 }
