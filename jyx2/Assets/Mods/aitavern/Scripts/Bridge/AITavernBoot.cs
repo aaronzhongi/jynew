@@ -141,6 +141,13 @@ namespace Jyx2.AITavern.Bridge
             // still sees everyone — avoids a spawn-order visibility bug.
             SeedSurroundings(mgr);
 
+            // Phase 3C (Plan §4.4 / §10 Q3 amended): same post-spawn site —
+            // seed each NPC mind's per-target Affection from the committed
+            // RelationType canon (deterministic, NO Grok). Runs after the
+            // RelationshipGraph is populated AND the player is registered so
+            // every talkable target (incl. the human) gets a baseline.
+            SeedAffection(mgr);
+
             // Wire UI bridges.
             AgentGenerateMessageOp.OnMessageGenerated += OnNpcMessageGenerated;
             AITavernInteractable.OnPlayerInteract += OnPlayerInteractWithNpc;
@@ -418,6 +425,61 @@ namespace Jyx2.AITavern.Bridge
                 mind.Surroundings.Summary = present.Count > 0
                     ? $"{mind.Surroundings.PlaceText}；在场可交谈者：{string.Join("、", present)}"
                     : mind.Surroundings.PlaceText;
+            }
+        }
+
+        // Phase 3C (Plan §4.4 / §5.5.1 / §10 Q3 amended): single post-spawn
+        // pass that seeds every NPC mind's per-target Affection from the
+        // committed RelationType canon. Mirrors SeedSurroundings: runs once
+        // AFTER all NPCs + the player are registered AND the RelationshipGraph
+        // is populated, so every talkable target gets a baseline regardless of
+        // spawn order. Deterministic — NO Grok, NO pipeline pass, NO new
+        // constant. The player IS a valid affection target (NPCs can feel
+        // toward the 江湖客) but the human gets NO mind of its own (skip
+        // IsHuman owners). Idempotent: GetOrCreateMind never duplicates and
+        // overwriting Targets[id] on a re-seed is safe.
+        void SeedAffection(AITavernManager mgr)
+        {
+            long now = mgr.Clock?.NowMs() ?? 0L;
+            var all = mgr.NPCs.All.ToList();
+            foreach (var self in all)
+            {
+                if (self == null || self.IsHuman) continue; // player has no mind
+
+                var mind = mgr.GetOrCreateMind(self.PlayerId);
+
+                foreach (var other in all)
+                {
+                    if (other == null || other.PlayerId.Equals(self.PlayerId)) continue;
+
+                    // Canon relation self→other. Unset edges (including every
+                    // NPC→player edge, since the player has no bio.Relationships)
+                    // resolve to RelationType.Neutral → baseline 0: NPCs start
+                    // neutral toward the unknown 江湖客 (correct).
+                    var rel = mgr.Relations != null
+                        ? mgr.Relations.GetRelation(self.PlayerId, other.PlayerId)
+                        : RelationType.Neutral;
+                    float b = AffectBaseline.ForRelation(rel);
+
+                    // Value == Baseline initially so Current(now) == Baseline
+                    // until 3D's appraisal moves Value (decay-secondary;
+                    // nothing moves affect on events until §5.3 reflection).
+                    mind.Targets[other.PlayerId] = new TargetState
+                    {
+                        Affection = new Affect
+                        {
+                            Label      = rel.ToString(),  // short canon label
+                            Value      = b,
+                            Baseline   = b,
+                            LastSetMs  = now,
+                            HalfLifeMs = AITavernConstants.AFFECTION_HALFLIFE_MS,
+                        },
+                    };
+                }
+
+                // 3D: mind.Emotion (§5.4 decaying mood) is set by the §5.3
+                // reflection/appraisal op — left unset here (no appraisal until
+                // 3D → §5.4 omitted by T3C.3's ContextAssembler until then).
             }
         }
 

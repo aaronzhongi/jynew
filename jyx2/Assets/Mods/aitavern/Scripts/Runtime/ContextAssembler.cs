@@ -26,6 +26,7 @@
 // structural, not a convention.
 
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 
 namespace Jyx2.AITavern
@@ -33,8 +34,9 @@ namespace Jyx2.AITavern
     /// <summary>
     /// Selects which assembler sections emit. <see cref="Full"/> is used by
     /// Start/Continue (§1-§4 in 3A; §1-§5 once 3B-3D land). <see cref="Leave"/>
-    /// is the lean farewell profile (Plan §6.1): canonically §2+§5.4+§5.5.3,
-    /// but §5.4/§5.5.3 are 3B-3D, so in 3A Leave == §2 only.
+    /// is the lean farewell profile (Plan §6.1): canonically §2+§5.4+§5.5.3.
+    /// §5.4 emotion lands in 3C (rendered here when set); §5.5.3 ring is 3D.
+    /// Until 3D appraisal first sets Emotion, Leave == §2 only in practice.
     /// </summary>
     public enum ContextProfile { Full, Leave }
 
@@ -72,18 +74,34 @@ namespace Jyx2.AITavern
                 // §4 Long-term knowledge — the TALKER's Dossier view.
                 AppendSection(sb, BuildLongTerm(talker, talkee, mgr), AITavernConstants.SECT_LONGTERM_BUDGET);
 
-                // §5 short-term — situation / task / surroundings (3B). Read-only
-                // lookup of the talker's RuntimeMindState; whole block omitted if
-                // no mind or all three sub-fields empty (Plan §6 empty-omission).
-                AppendSection(sb, BuildShortTerm(talker, mgr), AITavernConstants.SECT_SHORTTERM_BUDGET);
+                // §5 short-term — 处境/目标/环境 (§5.1-5.3, 3B) + 此刻心绪
+                // (§5.4 emotion, 3C done) as ONE cohesive block under one
+                // header / one budget. Read-only lookup of the talker's
+                // RuntimeMindState; whole block omitted if no mind or all of
+                // §5.1+§5.2+§5.3+§5.4 are empty (Plan §6 empty-omission).
+                // `now` threaded in for §5.4's read-time exp decay.
+                AppendSection(sb, BuildShortTerm(talker, mgr, now), AITavernConstants.SECT_SHORTTERM_BUDGET);
 
-                // 3C: §5.4 emotion appends AFTER the §5.1-5.3 short-term block
-                //     here (decaying, omit below EMOTION_FLOOR).
-                // 3D: §5.0 global reflection + §5.5 per-target (affection /
-                //     reflection summary / episodic ring) slot here. The ring
-                //     becomes the SOLE transcript source — that is when
+                // §5.5.1 affection — the talker's CURRENT好恶 toward THIS
+                // talkee (decays toward the canon relationship baseline,
+                // read-time via Affect.Current(now)). Full-profile ONLY:
+                // Plan §6.1's lean Leave list is "§2+§5.4+§5.5.3" — §5.5.1
+                // is NOT in it (Leave gets the §5.5.3 ring only, which is
+                // 3D), so affection stays Full-only for 3C. Starts the §5.5
+                // per-target area; emitted under its own `·对 X·` header,
+                // omitted entirely (no bare header) when there is no target
+                // entry or no Affection (the 3C norm until 3D appraisal).
+                AppendSection(sb, AffectionBlock(talker, talkee, mgr, now), AITavernConstants.SECT_SHORTTERM_BUDGET);
+
+                // 3C done (§5.4 emotion folded into BuildShortTerm; §5.5.1
+                //     affection rendered above, Full-only).
+                // 3D: §5.0 global reflection slots BEFORE the §5.5 per-target
+                //     area; §5.5.2 reflection summary + §5.5.3 episodic ring
+                //     append under the SAME `·对 X·` header AffectionBlock
+                //     opens (see the // 3D seam inside AffectionBlock). The
+                //     ring becomes the SOLE transcript source — that is when
                 //     ConversationPrompts.BuildContinue's AppendTranscript is
-                //     deleted (Plan §6.1). In 3A AppendTranscript STAYS.
+                //     deleted (Plan §6.1). In 3A/3C AppendTranscript STAYS.
             }
             else // ContextProfile.Leave
             {
@@ -97,7 +115,17 @@ namespace Jyx2.AITavern
                 // lean farewell carries only §2 (+ later §5.4/§5.5.3).
                 AppendSection(sb, BuildSelfBio(talkerBio), AITavernConstants.SECT_SELFBIO_BUDGET);
 
-                // 3C: §5.4 emotion slots here (Leave profile).
+                // §5.4 emotion — Plan §6.1 explicitly includes §5.4 in the
+                // lean Leave list ("§2+§5.4+§5.5.3"). A tiny standalone
+                // 【眼前局势 — 短期记忆】 block carrying ONLY 此刻心绪 (NOT
+                // §5.1/5.2/5.3 — those stay Full-only per T3B.3 / §6.1).
+                // Omitted entirely when there is no emotion line (no mind,
+                // Emotion unset, or Current(now) below EMOTION_FLOOR) — that
+                // is the 3C norm, so Leave stays §2-only in practice until
+                // 3D appraisal first sets Emotion.
+                AppendSection(sb, EmotionOnlyBlock(talker, mgr, now), AITavernConstants.SECT_SHORTTERM_BUDGET);
+
+                // 3C done (§5.4 emotion-only block rendered above for Leave).
                 // 3D: §5.5.3 episodic ring slots here (Leave profile).
             }
 
@@ -451,18 +479,20 @@ namespace Jyx2.AITavern
             return null;
         }
 
-        // ---- §5.1-5.3 short-term (volatile, SECT_SHORTTERM_BUDGET) ----
+        // ---- §5.1-5.4 short-term (volatile, SECT_SHORTTERM_BUDGET) ----
 
         // The talker's runtime working memory: 处境 (§5.1 Situation) / 目标
-        // (§5.2 Task) / 环境 (§5.3 Surroundings). READ-ONLY: the assembler is
-        // a pure synchronous renderer (Plan §6) — it looks the mind up with
-        // TryGetValue and NEVER calls GetOrCreateMind or writes any field, so
-        // rendering a prompt cannot mutate process state. Mirrors the
-        // empty-omission contract of BuildSelfBio/BuildLongTerm: every
-        // sub-line is emitted only if its source is non-empty, and if ALL
-        // THREE are empty the whole §5 block (header included) is omitted.
-        // 3B-only: no decay/reflection, no Grok (Plan §8).
-        static string BuildShortTerm(Agent talker, AITavernManager mgr)
+        // (§5.2 Task) / 环境 (§5.3 Surroundings) / 此刻心绪 (§5.4 Emotion,
+        // 3C). READ-ONLY: the assembler is a pure synchronous renderer (Plan
+        // §6) — it looks the mind up with TryGetValue and NEVER calls
+        // GetOrCreateMind or writes any field, so rendering a prompt cannot
+        // mutate process state. Mirrors the empty-omission contract of
+        // BuildSelfBio/BuildLongTerm: every sub-line is emitted only if its
+        // source is non-empty, and if §5.1+§5.2+§5.3+§5.4 are ALL empty the
+        // whole §5 block (header included) is omitted. §5.4 decays at
+        // read-time via Affect.Current(now) (`now` threaded from Build); no
+        // mutation, no Grok (Plan §8).
+        static string BuildShortTerm(Agent talker, AITavernManager mgr, long now)
         {
             if (talker == null || mgr == null || mgr.Minds == null) return null;
 
@@ -503,15 +533,122 @@ namespace Jyx2.AITavern
             }
             bool hasSurroundings = !string.IsNullOrWhiteSpace(surroundings);
 
-            // All three empty → omit the whole §5 block (no bare header) —
-            // same `any`/null-return contract as BuildLongTerm.
-            if (!hasSituation && !hasTask && !hasSurroundings) return null;
+            // §5.4 此刻心绪 — read-time decayed emotion line (null when
+            // Emotion unset OR Current(now) < EMOTION_FLOOR). Folded into
+            // THIS block so 处境/目标/环境/此刻心绪 share one header & one
+            // budget; it sorts LAST per the §1 mock + the consumed 3C seam
+            // ("§5.4 emotion appends AFTER the §5.1-5.3 short-term block").
+            string emotion = EmotionLine(mind, now);
+            bool hasEmotion = emotion != null;
+
+            // §5.1+§5.2+§5.3+§5.4 ALL empty → omit the whole §5 block (no
+            // bare header) — same `any`/null-return contract as BuildLongTerm.
+            if (!hasSituation && !hasTask && !hasSurroundings && !hasEmotion) return null;
 
             var sb = new StringBuilder();
             sb.Append("【眼前局势 — 短期记忆】");
             if (hasSituation) sb.Append("\n处境：").Append(mind.Situation.Trim());
             if (hasTask)      sb.Append("\n目标：").Append(mind.Task.Trim());
             if (hasSurroundings) sb.Append("\n环境：").Append(surroundings);
+            if (hasEmotion)   sb.Append('\n').Append(emotion);
+            return sb.ToString();
+        }
+
+        // ---- §5.4 emotion (decaying, SECT_SHORTTERM_BUDGET) ----
+
+        // §5.4 此刻心绪: the talker's current mood. READ-ONLY, read-time exp
+        // decay via Affect.Current(now) (nothing ticks it; Plan §4.3
+        // decay-secondary). Returns null — so the line is OMITTED — when:
+        //   • no mind / Emotion unset (the normal 3C state: nothing sets
+        //     Emotion until the 3D appraisal op), OR
+        //   • the decayed intensity has fallen below EMOTION_FLOOR ("mood
+        //     has passed", Plan §4.3 omit-below-floor).
+        // One short line matching the §1 mock's spirit ("此刻心绪：警惕（强度
+        // 0.6，…正缓缓平复）"); the trigger clause is 3D appraisal context
+        // we don't have in 3C, so we emit the stable "正缓缓平复" tail. Float
+        // formatted with InvariantCulture (determinism — no locale comma).
+        static string EmotionLine(RuntimeMindState mind, long now)
+        {
+            if (mind == null || mind.Emotion == null) return null;   // unset → omit
+            float cur = mind.Emotion.Current(now);
+            if (cur < AITavernConstants.EMOTION_FLOOR) return null;   // mood has passed → omit
+
+            string label = mind.Emotion.Label;
+            string intensity = cur.ToString("0.0", CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(label))
+                return "此刻心绪：（强度 " + intensity + "，正缓缓平复）";
+            return "此刻心绪：" + label.Trim() + "（强度 " + intensity + "，正缓缓平复）";
+        }
+
+        // §5.4 emotion as a STANDALONE 【眼前局势 — 短期记忆】 block for the
+        // Leave profile (Plan §6.1 puts §5.4 in the lean farewell list). It
+        // carries ONLY 此刻心绪 — deliberately NO §5.1/5.2/5.3 (Full-only per
+        // T3B.3 / §6.1). Returns null (whole block omitted, no bare header)
+        // when there is no emotion line — the 3C norm, so Leave stays
+        // §2-only until 3D appraisal first sets Emotion. Read-only.
+        static string EmotionOnlyBlock(Agent talker, AITavernManager mgr, long now)
+        {
+            if (talker == null || mgr == null || mgr.Minds == null) return null;
+            RuntimeMindState mind;
+            if (!mgr.Minds.TryGetValue(talker.PlayerId, out mind) || mind == null)
+                return null;
+            string emotion = EmotionLine(mind, now);
+            if (emotion == null) return null;   // no mood → omit the whole block
+            return "【眼前局势 — 短期记忆】\n" + emotion;
+        }
+
+        // ---- §5.5.1 affection (decaying, SECT_SHORTTERM_BUDGET) ----
+
+        // §5.5 per-target area, opening with §5.5.1 当下好恶: the talker's
+        // CURRENT affect toward THIS talkee, decaying at read-time toward the
+        // CANON relationship baseline (NOT 0) via Affect.Current(now) (Plan
+        // §4.4). Full-profile ONLY (Plan §6.1 lean Leave = §2+§5.4+§5.5.3;
+        // §5.5.1 is not in that list). READ-ONLY: TryGetValue on the talker's
+        // mind + Targets, NEVER GetOrCreateMind / no writes. Returns null —
+        // whole block omitted, NO bare `·对 X·` header — when there is no
+        // mind / no Targets / no entry for this talkee / no Affection (the
+        // 3C norm until 3D appraisal seeds affection). Signed value to 2dp
+        // with InvariantCulture (determinism). Matches the §1 mock shape
+        // ("·对 欧阳克·" / "当下好恶：…（…，向长期基线缓回）").
+        static string AffectionBlock(Agent talker, Agent talkee, AITavernManager mgr, long now)
+        {
+            if (talker == null || talkee == null || mgr == null || mgr.Minds == null) return null;
+
+            RuntimeMindState mind;
+            if (!mgr.Minds.TryGetValue(talker.PlayerId, out mind) || mind == null) return null;
+            if (mind.Targets == null) return null;
+
+            // Key on talkee.PlayerId — the SAME GameId the FSM (T3C.2) seeds
+            // target entries with. Read-only lookup, never create.
+            TargetState ts;
+            if (!mind.Targets.TryGetValue(talkee.PlayerId, out ts) || ts == null) return null;
+            if (ts.Affection == null) return null;   // no affect for this pair → omit
+
+            float cur = ts.Affection.Current(now);
+            // Signed (e.g. "-0.55"); "+" not prefixed on positives to match
+            // the §1 mock's bare/negative form. InvariantCulture → "."/"-".
+            string val = cur.ToString("0.00", CultureInfo.InvariantCulture);
+
+            // Talkee display name: prefer the authored Bio name, else the id.
+            var talkeeBio = talkee.Bio;
+            string name = talkeeBio != null && !string.IsNullOrWhiteSpace(talkeeBio.BioName)
+                ? talkeeBio.BioName.Trim()
+                : talkee.PlayerId.Value;
+
+            var sb = new StringBuilder();
+            sb.Append("·对 ").Append(name).Append('·');
+            string label = ts.Affection.Label;
+            if (string.IsNullOrWhiteSpace(label))
+                sb.Append("\n当下好恶：").Append(val).Append("（向长期基线缓回）");
+            else
+                sb.Append("\n当下好恶：").Append(val)
+                  .Append('（').Append(label.Trim()).Append("，向长期基线缓回）");
+
+            // 3D: §5.5.2 reflection summary + §5.5.3 episodic ring append
+            //     under THIS ·对 X· header (TargetState.ReflectionSummary /
+            //     Ring — declared in 3D; need TurnRecord + MEMORY_RING_CAP).
+            //     §5.0 global reflection slots BEFORE this block in Build.
+
             return sb.ToString();
         }
     }

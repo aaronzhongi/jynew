@@ -69,5 +69,14 @@ namespace Jyx2.AITavern
         // situation + task + surroundings (3B); 3C appends §5.4 emotion
         // and 3D §5.0/§5.5 within their own logic, not a separate budget.
         public const int SECT_SHORTTERM_BUDGET = 4000; // §5 working memory
+
+        // Phase 3C — affect decay (Plan §7). Lazy exp decay via Affect.Current;
+        // emotion relaxes to 平静/0 fast, affection reverts to the canon
+        // relationship baseline slowly (NOT to 0). EMOTION_FLOOR: below this
+        // Current() the §5.4 line is omitted ("mood has passed"). The deltas
+        // that move Value on events (AFFECT_DELTA_DEADBAND etc.) are 3D.
+        public const float EMOTION_HALFLIFE_MS   = 90_000f;   // ~1.5 min
+        public const float EMOTION_FLOOR         = 0.12f;     // below → omit §5.4
+        public const float AFFECTION_HALFLIFE_MS = 900_000f;  // ~15 min, reverts to canon baseline
     }
 }
