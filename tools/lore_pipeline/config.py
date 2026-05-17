@@ -107,6 +107,8 @@ SPOILER_EXCLUSIONS = [
 ROSTER = [
     {"agentId": "huangrong", "novelName": "黃蓉"},
     {"agentId": "ouyangke", "novelName": "歐陽克"},
+    {"agentId": "guojing", "novelName": "郭靖"},
+    {"agentId": "munianci", "novelName": "穆念慈"},
 ]
 
 # ---------------------------------------------------------------------------

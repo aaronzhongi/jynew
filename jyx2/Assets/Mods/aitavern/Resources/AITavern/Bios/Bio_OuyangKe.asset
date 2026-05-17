@@ -21,9 +21,17 @@ MonoBehaviour:
   Relationships:
   - TargetAgentId: huangrong
     Relation: 3
+  - TargetAgentId: guojing
+    Relation: 4
+  - TargetAgentId: munianci
+    Relation: 0
   Interests:
   - TargetAgentId: huangrong
     Score: 0.95
+  - TargetAgentId: guojing
+    Score: 0.3
+  - TargetAgentId: munianci
+    Score: 0.5
   StartingItems: e2030000
   SpawnMarkerName: NPC_Spawn_B
   Sex: 0
