@@ -51,6 +51,10 @@ namespace Jyx2.AITavern.Bridge
         // can target them in their decision tree (INV-3.10-1, INV-3.10-2).
         const string PLAYER_AGENT_ID = "player";
 
+        // Index into the marker-less fallback spawn ring (see SpawnNpc).
+        // Reset at the start of every boot so re-entering play is deterministic.
+        int _fallbackSpawnIndex;
+
         async void Start()
         {
             try { await BootAsync(); }
@@ -284,12 +288,19 @@ namespace Jyx2.AITavern.Bridge
             }
             view.transform.SetParent(npcRoot, false);
 
-            // Spawn marker lookup. Fallback to npcRoot origin if missing.
+            // Spawn marker lookup. If the named marker is missing, spread the
+            // NPC on a small deterministic ring around npcRoot instead of
+            // stacking every marker-less NPC on the exact origin (which would
+            // make proximity-pairing degenerate with 3+ NPCs).
             var marker = GameObject.Find("Level/NPC/" + bio.SpawnMarkerName);
             if (marker == null)
             {
-                view.transform.position = npcRoot.position;
-                Debug.LogWarning($"[AITavernBoot] Spawn marker '{bio.SpawnMarkerName}' not found; using NPC parent origin for {bio.AgentId}.");
+                const float ringRadius = 2.5f;
+                float ang = _fallbackSpawnIndex * 2.39996323f; // golden angle (rad)
+                var offset = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ringRadius;
+                view.transform.position = npcRoot.position + offset;
+                _fallbackSpawnIndex++;
+                Debug.LogWarning($"[AITavernBoot] Spawn marker '{bio.SpawnMarkerName}' not found; placing {bio.AgentId} on fallback ring (idx {_fallbackSpawnIndex - 1}).");
             }
             else
             {
